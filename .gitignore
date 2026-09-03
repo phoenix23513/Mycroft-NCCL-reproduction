@@ -1,0 +1,43 @@
+# Build outputs
+/.build/
+/build/
+/cmake-build-*/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/CTestTestfile.cmake
+**/Makefile
+
+# Compiled artifacts
+*.a
+*.o
+*.so
+*.out
+*.exe
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local configuration, credentials, and large experiment output
+.env
+.env.*
+!.env.example
+*.log
+results/**
+!results/samples/
+!results/samples/.gitkeep
+
+# Third-party source is added deliberately at the planned milestone.
+/third_party/nccl/
