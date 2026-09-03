@@ -1,6 +1,6 @@
 # Day 01 — Repository Bootstrap
 
-Status: locally validated; GitHub publication pending
+Status: completed
 
 ## Codex-provided scaffold
 
@@ -17,7 +17,7 @@ Status: locally validated; GitHub publication pending
 - [x] Review every migrated Markdown file for public release.
 - [x] Run `./scripts/check.sh` independently.
 - [x] Confirm the observed output matches the Day 01 expectation.
-- [ ] Publish the repository only after the review is complete.
+- [x] Publish the repository only after the review is complete.
 
 ## Expected result
 
