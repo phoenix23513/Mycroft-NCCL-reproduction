@@ -26,4 +26,4 @@ else
   "$build_dir/mycroft_cpp_smoke"
 fi
 
-echo "[check] All Day 01 checks passed"
+echo "[check] All repository checks passed"

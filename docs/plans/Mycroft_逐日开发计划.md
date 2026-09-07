@@ -6,7 +6,7 @@
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：Day 01 已验证并公开发布；等待用户明确授权进入 Day 02
+- 当前状态：Day 02 已验收；Crater 单容器 CPU 冒烟作业现象符合预期，等待确认 Day 03 任务边界
 
 ## 1. 计划要解决的问题
 
@@ -274,29 +274,23 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 
 **建议 commit**：`chore: bootstrap reproducible Mycroft project`
 
-### Day 02：Crater 从零认识平台和配置页面
+### Day 02：Crater 从零认识平台和单容器 CPU 冒烟作业
 
-**实际问题**：先理解本项目最终运行环境中“提交一个作业”到底创建了什么，避免后续只会照抄页面配置。
+**实际问题**：先理解本项目最终运行环境中“提交一个作业”到底创建了什么，并亲自完成一次低资源作业的配置、提交、观察和清理闭环。
 
 **只讲普通用户范围**：Crater、Kubernetes、Volcano、物理 node、Pod、container、image、job、role、replica、mount、environment、job phase、log。
 
-**文件框架**：
+**文件框架**：`docs/crater/Crater平台入门与实验手册.md`。在产生真实探测代码或平台导出配置之前，不预建假模板。
 
-```text
-docs/crater/
-├── 平台概念与Mycroft部署关系.md
-├── DDP作业页面字段说明.md
-└── 作业生命周期与排错入口.md
-cluster/crater/jobs/pytorch-ddp-2node.template.json
-```
+**Codex 搭建**：一份合并手册，包含必要概念、GUI 填写值、预期现象、排错顺序和脱敏规则。
 
-**Codex 搭建**：概念图、逐字段模板、正确/错误现象表和脱敏规则。
+**用户完成**：用自己的话说明镜像与容器、Pod 与物理节点、副本与进程的区别；提交一个 1 CPU、2 GiB、0 GPU 的 Custom Job；查看 phase、Pod、Node 和日志；验证共享目录结果文件；停止或清理作业；导出原始配置并只在仓库中保留脱敏模板。
 
-**用户完成**：用自己的话说明镜像与容器、Pod 与物理节点、副本与进程的区别；根据页面导出原始配置但不提交，仅把脱敏后的模板放入仓库。
+**验收与预期现象**：日志出现 `hello from crater` 和容器运行信息；共享目录生成内容为 `day02 success` 的结果文件；作业正常结束且用户能找到清理入口。用户能说明为什么“两个容器”不必然是“两台机器”，以及 Target Node Allow List 只限制可选节点、不保证自动分散。
 
-**验收与预期现象**：用户能说明为什么“两个容器”不必然是“两台机器”，以及 Target Node Allow List 只限制可选节点、不保证自动分散。
+**本日不使用**：GPU、PyTorch DDP、NCCL、RDMA、Target Node Control 和自定义镜像构建。
 
-**建议 commit**：`docs(crater): document user-facing job model and fields`
+**建议 commit**：`feat(crater): complete first CPU smoke job`
 
 ### Day 03：Crater CPU 双 Pod 与共享目录探测
 

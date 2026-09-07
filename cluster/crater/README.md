@@ -1,3 +1,3 @@
-# Crater Experiments
+# Crater 实验
 
-This directory will contain beginner-oriented platform notes and sanitized probes, image definitions, job templates, and scripts. Never commit internal domains, credentials, usernames, personal paths, or real node names.
+本目录用于保存面向初学者的平台说明，以及经过脱敏的探测程序、镜像定义、作业模板和脚本。禁止提交内部域名、凭据、用户名、个人路径或真实节点名。
