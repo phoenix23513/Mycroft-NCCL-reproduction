@@ -98,16 +98,43 @@ Day 02 使用 **Custom Job** 页面，不使用 PyTorch DDP Job。所有配置�
 
 每次只修改一个字段。CPU 冒烟失败时，不要通过申请 GPU、启用 RDMA 或限制节点来绕过问题。
 
-## 4. Day 03 和 Day 04 的递进
+## 4. Day 03：双 Pod CPU DDP
 
-- Day 03：PyTorch DDP Job，Master 1、Worker 1、GPU 0，使用 Gloo 验证两个 Pod 的 rank、环境变量和 CPU AllReduce。
-- Day 04：单 Pod、单 GPU，验证 `nvidia-smi`、PyTorch CUDA、GPU tensor 运算和版本信息。
+### 4.1 程序任务
 
-## 5. 公开仓库规则
+在 `cluster/crater/probes/cpu_ddp_probe.py` 中完成 `run_all_reduce()`：使用平台注入的 `WORLD_SIZE`、`RANK`、`MASTER_ADDR` 和 `MASTER_PORT` 初始化 Gloo 进程组，以 `rank + 1` 作为本 rank 初始值，执行一次求和 AllReduce，最后销毁进程组。
+
+本地测试只验证环境配置接口，不模拟多 Pod 通信。真正的分布式验收必须在 Crater 完成。
+
+### 4.2 GUI 配置
+
+使用 PyTorch DDP Job，并为 Master 和 Worker 选择同一个包含 PyTorch 的稳定镜像：
+
+| Role | Replica | CPU | Memory | GPU |
+|---|---:|---:|---:|---:|
+| Master | 1 | 1 | 2 GiB | 0 |
+| Worker | 1 | 1 | 2 GiB | 0 |
+
+- 两个 Role 使用相同的持久化挂载点和代码路径。
+- 启动命令为 `/crater-start.sh python <REPOSITORY_ROOT>/cluster/crater/probes/cpu_ddp_probe.py`，执行前替换真实路径。
+- Target Node Control 关闭；Day 03 不要求两个 Pod 位于不同物理 Node。
+
+### 4.3 预期现象
+
+- 作业详情中出现一个 Master Pod 和一个 Worker Pod。
+- 两份日志的 `WORLD_SIZE` 都是 2，`RANK` 分别为 0 和 1。
+- rank 0 初始值为 1，rank 1 初始值为 2；两份日志最终都显示 `result` 为 3。
+- 两个进程正常退出，整个 Job 成功完成。
+
+## 5. Day 04 预告
+
+Day 04 使用单 Pod、单 GPU，验证 `nvidia-smi`、PyTorch CUDA、GPU tensor 运算和版本信息。
+
+## 6. 公开仓库规则
 
 真实用户名、个人挂载路径、内部域名、镜像仓库地址、节点名、账户 ID、凭据和原始日志不得直接提交。GUI 导出的原始配置先保存在仓库外；确认真实格式并完成脱敏后，才在 `cluster/crater/jobs/` 中新增可复查配置。
 
-## 6. Day 02 验收问题
+## 7. Day 02 验收问题
 
 完成实验后，应能用自己的话回答：
 
@@ -117,7 +144,7 @@ Day 02 使用 **Custom Job** 页面，不使用 PyTorch DDP Job。所有配置�
 4. 为什么两个 Pod 不一定运行在两台物理机？
 5. 作业失败后，依次从哪里查看状态和日志？
 
-## 7. Day 02 实验结果
+## 8. Day 02 实验结果
 
 - 使用 Crater GUI 成功运行 1 CPU、2 GiB、0 GPU 的单容器 Custom Job。
 - 容器成功执行 `/crater-start.sh` 和 Bash 启动命令。
