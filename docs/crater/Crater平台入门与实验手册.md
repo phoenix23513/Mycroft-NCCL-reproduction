@@ -126,9 +126,24 @@ Day 02 使用 **Custom Job** 页面，不使用 PyTorch DDP Job。所有配置�
 - rank 0 初始值为 1，rank 1 初始值为 2；两份日志最终都显示 `result` 为 3。
 - 两个进程正常退出，整个 Job 成功完成。
 
-## 5. Day 04 预告
+### 4.4 实际验收
 
-Day 04 使用单 Pod、单 GPU，验证 `nvidia-smi`、PyTorch CUDA、GPU tensor 运算和版本信息。
+- Crater 双 Pod 作业正常完成，rank 0 输出 `world_size=2` 和 `result=3.0`。
+- `result=3.0` 证明 rank 1 已加入同一个 Gloo 进程组并贡献初始值 2；否则 rank 0 无法独立完成 `world_size=2` 的 AllReduce。
+- 平台页面只展示了 Master 日志，因此不把 Worker 日志可见性作为程序正确性的必要条件。
+
+## 5. Day 04：单 Pod 单 GPU 基线
+
+Day 04 使用单 Pod、单 GPU，验证 `nvidia-smi`、PyTorch CUDA、GPU tensor 运算和版本信息。核心实现位于 `cluster/crater/probes/gpu_probe.py`，本地测试使用假模块约束接口，不要求开发机安装 PyTorch 或具备 GPU。
+
+### 5.1 实验结果
+
+- Crater Custom Job 申请 1 张 GPU 后正常完成，退出代码为 0；
+- 容器可见 1 张 `Tesla V100-PCIE-32GB`，驱动版本为 `580.178.04`；
+- PyTorch 版本为 `2.6.0a0+df5bbc09d1.nv24.12`，其 CUDA 版本为 `12.6`；
+- 两个 CUDA `float32` Tensor 完成加法与求和，结果为 `21.0`；
+- `CUDA_VISIBLE_DEVICES` 为空，但 `device_count=1` 且 CUDA 运算成功，说明当前容器运行时只暴露了一个逻辑 GPU；这不表示物理节点只有一张 GPU；
+- 本实验只验证单 Pod 单 GPU 运行时，不验证 NCCL、跨 Pod 或跨物理节点通信。
 
 ## 6. 公开仓库规则
 

@@ -112,6 +112,3 @@ ncclAllReduce()
 - GPU primitive 与 Channel 的 send/recv 连接如何衔接；
 - 多 Channel 如何并行处理同一个 AllReduce 的不同数据范围。
 
-## 产出
-
-- [阶段 01：Communicator 初始化与 AllReduce Host 任务提交](notes/阶段01_Communicator与AllReduce任务提交.md)

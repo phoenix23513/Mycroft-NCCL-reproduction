@@ -8,7 +8,7 @@
 
 这是一个独立实现的系统研究复现项目，目标是逐步构建 Mycroft 风格的 NCCL 通信停滞检测与根因分析原型。开发主线是完成可运行的 E01—E06；NCCL、Docker、PyTorch、Crater 和分布式系统知识按开发需要补充。
 
-当前状态：**Day 03 开发中：Crater 双 Pod CPU DDP 探测骨架已建立**。
+当前状态：**Day 04 已验证：Crater 单 Pod 单 GPU 基线通过，Day 05 尚未开始**。
 
 ### 复现边界
 
@@ -50,7 +50,7 @@
 
 This repository is an independent systems reproduction project. Its development goal is to build an E01–E06 prototype for Mycroft-style NCCL communication-stall detection and root-cause analysis. NCCL and cluster knowledge is learned just in time as required by implementation.
 
-Current status: **Day 03 in progress: the Crater two-Pod CPU DDP probe scaffold is ready**.
+Current status: **Day 04 verified: the single-Pod, single-GPU Crater baseline passed; Day 05 has not started**.
 
 ### Reproduction boundaries
 

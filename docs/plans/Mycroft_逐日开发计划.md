@@ -6,7 +6,7 @@
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：Day 03 开发中；Crater 双 Pod CPU DDP 探测接口与本地测试骨架已建立
+- 当前状态：Day 04 已验证、待提交；Crater 单 Pod 单 GPU 基线已通过，Day 05 尚未开始
 
 ## 1. 计划要解决的问题
 
@@ -294,15 +294,15 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 
 ### Day 03：Crater CPU 双 Pod 与共享目录探测
 
-**实际问题**：不用 GPU 验证 Master/Worker、环境变量、服务发现、日志和共享文件系统。
+**实际问题**：不用 GPU 验证 Master/Worker、环境变量、服务发现和 Gloo 集合通信。
 
-**文件框架**：`cluster/crater/probes/env_probe.py`、`scripts/run_cpu_probe.sh`、C01 报告。
+**文件框架**：`cluster/crater/probes/cpu_ddp_probe.py`、`tests/python/test_cpu_ddp_probe.py`。
 
-**Codex 搭建**：探测接口、pytest、本次页面填写表和预期日志模板。
+**Codex 搭建**：探测接口、标准库单元测试、GUI 填写值和预期日志。
 
-**用户核心逻辑与操作**：实现 hostname/env 输出、Gloo process group 和 CPU all-reduce；在页面配置 Master 1/Worker 1/GPU 0；使用 `/crater-start.sh`；提交、查看两个 Pod、日志和共享文件。
+**用户核心逻辑与操作**：实现 Gloo process group 和 CPU AllReduce；在页面配置 Master 1/Worker 1/GPU 0；通过 GUI 上传单个探针文件并运行。
 
-**验收与预期现象**：`WORLD_SIZE=2`，rank 为 0/1，AllReduce 结果一致；两个 Pod 都能写各自文件并读取共享目录；用户会停止/清理作业。
+**验收与预期现象**：`WORLD_SIZE=2`，rank 0/1 共同完成 AllReduce；rank 0 日志输出 `result=3.0`，作业正常退出。即使平台未展示 Worker 日志，该结果也证明 rank 1 已加入通信并贡献数值 2。
 
 **建议 commit**：`feat(crater): validate two-pod CPU control plane`
 
@@ -312,9 +312,9 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 
 **最小补充知识**：GPU request、GPU model、`CUDA_VISIBLE_DEVICES`、宿主驱动与容器 CUDA toolkit 的区别。
 
-**文件框架**：`cluster/crater/probes/gpu_probe.py`、C02 报告。
+**文件框架**：`cluster/crater/probes/gpu_probe.py`、`tests/python/test_gpu_probe.py`。
 
-**Codex 搭建**：检查项、页面配置表和输出模板。
+**Codex 搭建**：GPU 探针接口、本地假模块测试、页面配置值和输出契约。
 
 **用户核心逻辑与操作**：检查 `nvidia-smi`、PyTorch CUDA、device count、GPU tensor 运算和同步；选择一张 V100，资源不足时选择 A100。
 
