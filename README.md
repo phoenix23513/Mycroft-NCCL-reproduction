@@ -8,7 +8,7 @@
 
 这是一个独立实现的系统研究复现项目，目标是逐步构建 Mycroft 风格的 NCCL 通信停滞检测与根因分析原型。开发主线是完成可运行的 E01—E06；NCCL、Docker、PyTorch、Crater 和分布式系统知识按开发需要补充。
 
-当前状态：**Day 05 已验证：4-rank、8-chunk Ring ReduceScatter 模拟器通过，Day 06 尚未开始**。
+当前状态：**Day 06 已验证：Ring AllReduce、96 条 JSONL 事件与通信动画通过；Day 07 尚未开始**。
 
 ### 复现边界
 
@@ -50,7 +50,7 @@
 
 This repository is an independent systems reproduction project. Its development goal is to build an E01–E06 prototype for Mycroft-style NCCL communication-stall detection and root-cause analysis. NCCL and cluster knowledge is learned just in time as required by implementation.
 
-Current status: **Day 05 verified: the four-rank, eight-chunk Ring ReduceScatter simulator passed; Day 06 has not started**.
+Current status: **Day 06 verified: Ring AllReduce, 96 JSONL events, and the communication animation passed; Day 07 has not started**.
 
 ### Reproduction boundaries
 

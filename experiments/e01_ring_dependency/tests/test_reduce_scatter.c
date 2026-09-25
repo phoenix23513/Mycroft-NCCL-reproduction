@@ -151,8 +151,10 @@ static bool test_first_step_updates_both_lanes(void) {
                 chunk
             );
             CHECK(
-                event->step == 0 && event->src_rank == src_rank &&
-                    event->dst_rank == dst_rank && event->chunk_id == chunk &&
+                event->phase == TRACE_PHASE_REDUCE_SCATTER &&
+                    event->action == TRACE_ACTION_RECV && event->step == 0 &&
+                    event->peer == src_rank && event->rank == dst_rank &&
+                    event->chunk_id == chunk &&
                     event->value == expected_value &&
                     event->contributor_mask == expected_mask,
                 "history record for destination rank=%d lane=%d",

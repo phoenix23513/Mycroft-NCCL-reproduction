@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>E01 Ring ReduceScatter 可视化</title>
+  <title>E01 Ring AllReduce 动画</title>
   <style>
     :root {
       color-scheme: dark;
@@ -13,64 +13,94 @@
       --line: #29415f;
       --text: #edf6ff;
       --muted: #9bb0c8;
-      --lane-0: #38bdf8;
-      --lane-1: #c084fc;
       --success: #4ade80;
       --warning: #fbbf24;
+      --rs: #38bdf8;
+      --ag: #c084fc;
+      --danger: #fb7185;
     }
 
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      min-width: 1040px;
+      min-width: 1180px;
       background:
-        radial-gradient(circle at 15% 0%, #14345a 0, transparent 32%),
-        radial-gradient(circle at 90% 10%, #39205a 0, transparent 28%),
+        radial-gradient(circle at 10% 0%, #14345a 0, transparent 32%),
+        radial-gradient(circle at 92% 8%, #39205a 0, transparent 28%),
         var(--bg);
       color: var(--text);
       font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
     }
 
-    main { max-width: 1500px; margin: 0 auto; padding: 28px; }
+    main {
+      max-width: 1560px;
+      margin: 0 auto;
+      padding: 26px;
+    }
 
     h1 { margin: 0 0 8px; font-size: 30px; }
-    h2 { margin: 0 0 16px; font-size: 19px; }
+    h2 { margin: 0 0 14px; font-size: 19px; }
     p { color: var(--muted); line-height: 1.65; }
+
+    code { color: #d7ecff; }
 
     .panel {
       margin-top: 18px;
-      padding: 20px;
+      padding: 18px;
       border: 1px solid var(--line);
       border-radius: 16px;
-      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      background: color-mix(in srgb, var(--panel) 95%, transparent);
       box-shadow: 0 18px 50px rgb(0 0 0 / 22%);
     }
 
-    .header-row, .controls, .legend, .timeline {
+    .header-row,
+    .controls,
+    .badges,
+    .legend,
+    .filter-row {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
     .header-row { justify-content: space-between; }
 
-    button {
+    button,
+    select {
       border: 1px solid #3c5877;
       border-radius: 10px;
-      padding: 9px 14px;
+      padding: 9px 13px;
       background: #172b44;
       color: var(--text);
       cursor: pointer;
       font-weight: 650;
     }
 
-    button:hover:not(:disabled) { background: #203c5e; }
-    button:disabled { cursor: not-allowed; opacity: .38; }
-    button.primary { border-color: #0284c7; background: #0369a1; }
+    button:hover:not(:disabled),
+    select:hover:not(:disabled) {
+      background: #203c5e;
+    }
 
-    .badge, .dot-label {
+    button:disabled,
+    select:disabled {
+      cursor: not-allowed;
+      opacity: .38;
+    }
+
+    button.primary {
+      border-color: #0284c7;
+      background: #0369a1;
+    }
+
+    button.active {
+      border-color: var(--success);
+      background: rgb(74 222 128 / 16%);
+    }
+
+    .badge,
+    .dot-label {
       display: inline-flex;
       align-items: center;
       gap: 7px;
@@ -81,399 +111,962 @@
       font-size: 13px;
     }
 
-    .swatch { width: 10px; height: 10px; border-radius: 50%; }
-    .lane-0 { background: var(--lane-0); }
-    .lane-1 { background: var(--lane-1); }
-    .owner-swatch { background: var(--warning); }
-    .changed-swatch { background: var(--success); }
+    .badge.rs { border: 1px solid var(--rs); }
+    .badge.ag { border: 1px solid var(--ag); }
+    .badge.done { border: 1px solid var(--success); }
 
-    .timeline { margin-top: 18px; }
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 16px;
+    }
+
     .timeline-step {
-      flex: 1;
-      min-width: 150px;
-      padding: 10px 12px;
+      padding: 10px 8px;
       border: 1px solid var(--line);
       border-radius: 10px;
       color: var(--muted);
       text-align: center;
+      font-size: 13px;
     }
+
     .timeline-step.active {
       border-color: var(--success);
       background: rgb(74 222 128 / 10%);
       color: var(--text);
     }
-    .timeline-step.done { color: var(--success); }
 
-    .ring {
+    .timeline-step.done { color: var(--success); }
+    .timeline-step.rs-step { box-shadow: inset 0 3px var(--rs); }
+    .timeline-step.ag-step { box-shadow: inset 0 3px var(--ag); }
+
+    .phase-explain {
       display: grid;
-      grid-template-columns: 1fr 72px 1fr 72px 1fr 72px 1fr;
-      align-items: stretch;
-      gap: 8px;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 14px;
+      align-items: center;
+      margin-top: 16px;
+    }
+
+    .phase-card {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0a1727;
+    }
+
+    .phase-card strong { display: block; margin-bottom: 5px; }
+    .phase-card.rs strong { color: var(--rs); }
+    .phase-card.ag strong { color: var(--ag); }
+    .plus { color: var(--muted); font-size: 24px; }
+
+    .stage-wrap {
+      overflow: visible;
+      padding-top: 86px;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 610px;
+      border: 1px solid #36516f;
+      border-radius: 16px;
+      background:
+        linear-gradient(180deg, rgb(56 189 248 / 5%), transparent 24%),
+        #091625;
+    }
+
+    .ring-guide {
+      position: absolute;
+      inset: 22px 5% auto 5%;
+      height: 52px;
+      pointer-events: none;
+    }
+
+    .ring-guide-line {
+      position: absolute;
+      left: 4%;
+      right: 4%;
+      top: 26px;
+      border-top: 2px dashed #527394;
+    }
+
+    .ring-guide-return {
+      position: absolute;
+      left: 2%;
+      right: 2%;
+      top: -80px;
+      height: 94px;
+      border: 2px dashed #527394;
+      border-bottom: 0;
+      border-radius: 48px 48px 0 0;
+    }
+
+    .guide-label {
+      position: absolute;
+      top: -67px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #10243a;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .rank-columns {
+      position: absolute;
+      inset: 62px 18px 18px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
     }
 
     .rank-card {
-      min-height: 170px;
-      padding: 15px;
+      min-width: 0;
+      padding: 13px;
       border: 1px solid var(--line);
       border-radius: 14px;
       background: var(--panel-2);
     }
 
-    .rank-title { display: flex; justify-content: space-between; font-weight: 750; }
-    .owns { color: var(--warning); font-size: 12px; }
-    .outbound { margin-top: 14px; display: grid; gap: 8px; }
-    .message-chip {
-      padding: 8px;
-      border-radius: 9px;
-      color: #06111d;
-      font-size: 12px;
-      font-weight: 750;
+    .rank-card.changed {
+      border-color: var(--success);
+      box-shadow: 0 0 0 1px rgb(74 222 128 / 20%);
     }
-    .message-chip.l0 { background: var(--lane-0); }
-    .message-chip.l1 { background: var(--lane-1); }
-    .idle { margin-top: 22px; color: var(--muted); font-size: 13px; }
 
-    .arrow {
+    .rank-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-weight: 800;
+    }
+
+    .owner-label {
+      color: var(--warning);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .chunk-list {
       display: grid;
-      place-items: center;
-      color: #5f7c9d;
-      font-size: 34px;
-    }
-    .arrow.pulse { animation: pulse 700ms ease-out; }
-    @keyframes pulse {
-      0% { color: var(--success); transform: translateX(-8px) scale(.8); }
-      60% { color: var(--success); transform: translateX(8px) scale(1.15); }
-      100% { color: #5f7c9d; transform: translateX(0) scale(1); }
+      grid-template-columns: 1fr;
+      gap: 7px;
     }
 
-    .return-edge {
-      margin-top: 12px;
-      padding: 10px;
-      border: 1px dashed #47698d;
-      border-radius: 10px;
+    .chunk-slot {
+      position: relative;
+      min-height: 52px;
+      border: 1px dashed #35506e;
+      border-radius: 9px;
+      background: #081321;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .chunk-slot.filtered { opacity: .12; }
+    .chunk-slot.updated { animation: receivePulse 850ms ease-out; }
+    .chunk-slot.owner-slot { border-color: rgb(251 191 36 / 65%); }
+
+    @keyframes receivePulse {
+      0% { transform: scale(.92); box-shadow: 0 0 0 0 rgb(74 222 128 / 70%); }
+      50% { transform: scale(1.035); box-shadow: 0 0 0 7px rgb(74 222 128 / 12%); }
+      100% { transform: scale(1); box-shadow: none; }
+    }
+
+    .chunk-block {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      align-items: center;
+      min-height: 50px;
+      overflow: hidden;
+      border-radius: 8px;
+      color: #07111f;
+      font-weight: 800;
+      box-shadow: inset 0 -12px 20px rgb(0 0 0 / 9%);
+    }
+
+    .chunk-id {
+      display: grid;
+      align-self: stretch;
+      place-items: center;
+      border-right: 1px solid rgb(7 17 31 / 25%);
+      font-size: 16px;
+    }
+
+    .chunk-data {
+      padding: 5px 8px;
+      line-height: 1.25;
+      font-size: 12px;
+    }
+
+    .chunk-data small {
+      display: block;
+      margin-top: 3px;
+      font-size: 10px;
+      font-weight: 750;
+      opacity: .78;
+    }
+
+    .owner-star {
+      position: absolute;
+      top: 3px;
+      right: 5px;
+      color: #fff7c2;
+      text-shadow: 0 1px 4px #000;
+      font-size: 12px;
+      z-index: 2;
+    }
+
+    .flying-layer {
+      position: absolute;
+      inset: 0;
+      overflow: visible;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .flying-chunk {
+      position: absolute;
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      align-items: center;
+      height: 46px;
+      overflow: hidden;
+      border: 3px solid #fff;
+      border-radius: 9px;
+      color: #07111f;
+      font-size: 11px;
+      font-weight: 850;
+      box-shadow: 0 12px 26px rgb(0 0 0 / 48%);
+      will-change: transform;
+    }
+
+    .flying-chunk .chunk-id { font-size: 14px; }
+    .flying-chunk .chunk-data { padding: 3px 6px; }
+    .flying-chunk .chunk-data small { font-size: 9px; }
+
+    .flight-label {
+      position: absolute;
+      z-index: 30;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #020817;
+      color: white;
+      font-size: 10px;
+      box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+      pointer-events: none;
+    }
+
+    .messages {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #1d344e;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child,
+    td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 650; }
+    tr:last-child td { border-bottom: 0; }
+    tr.lane-0 td:first-child { border-left: 3px solid var(--rs); }
+    tr.lane-1 td:first-child { border-left: 3px solid var(--ag); }
+
+    .operation-reduce { color: var(--rs); font-weight: 750; }
+    .operation-copy { color: var(--ag); font-weight: 750; }
+
+    .note {
+      margin: 14px 0 0;
+      padding: 11px 13px;
+      border-left: 3px solid var(--warning);
+      background: rgb(251 191 36 / 8%);
+    }
+
+    .empty {
+      padding: 28px;
       color: var(--muted);
       text-align: center;
     }
-
-    .rank-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .state-card {
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #0a1727;
-    }
-    .state-card h3 { margin: 0; padding: 12px 14px; background: #142840; }
-
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { padding: 8px 10px; border-bottom: 1px solid #1d344e; text-align: right; }
-    th:first-child, td:first-child { text-align: left; }
-    th { color: var(--muted); font-weight: 650; }
-    tr:last-child td { border-bottom: 0; }
-    tr.owner td:first-child { color: var(--warning); font-weight: 750; }
-    tr.changed { background: rgb(74 222 128 / 9%); }
-    tr.final-owner { box-shadow: inset 3px 0 var(--success); }
-    .lane-mark { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
-
-    .message-table td { white-space: nowrap; }
-    .message-table tr.l0 td:first-child { border-left: 3px solid var(--lane-0); }
-    .message-table tr.l1 td:first-child { border-left: 3px solid var(--lane-1); }
-
-    code { color: #d7ecff; }
-    .note { margin: 16px 0 0; padding: 12px 14px; border-left: 3px solid var(--warning); background: rgb(251 191 36 / 8%); }
   </style>
 </head>
 <body>
   <main>
     <div class="header-row">
       <div>
-        <h1>4-rank / 8-chunk Ring ReduceScatter</h1>
-        <p>与 <code>ring_sim.c</code> 的固定输入、两条 lane 和三步同步调度一致。</p>
+        <h1>4-rank / 8-chunk Ring AllReduce 动画</h1>
+        <p>完整展示 ReduceScatter 与 AllGather。彩色方块表示正在传递的 <code>ChunkState</code>。</p>
       </div>
       <div class="controls">
         <button id="reset">重置</button>
         <button id="prev">上一步</button>
         <button id="next" class="primary">下一步</button>
         <button id="play">自动播放</button>
+        <label>
+          速度
+          <select id="speed">
+            <option value="0.6">0.6×</option>
+            <option value="1" selected>1×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
       </div>
     </div>
 
     <section class="panel">
       <div class="header-row">
-        <div>
-          <span class="badge" id="phase"></span>
-          <span class="badge" id="summary"></span>
+        <div class="badges">
+          <span class="badge" id="phase-badge">初始化</span>
+          <span class="badge" id="step-badge">状态 0/6</span>
+          <span class="badge" id="event-badge">已产生 0/96 条事件</span>
         </div>
-        <div class="legend">
-          <span class="dot-label"><i class="swatch lane-0"></i>lane 0：chunk 0—3</span>
-          <span class="dot-label"><i class="swatch lane-1"></i>lane 1：chunk 4—7</span>
-          <span class="dot-label"><i class="swatch owner-swatch"></i>最终 owner</span>
-          <span class="dot-label"><i class="swatch changed-swatch"></i>本步更新</span>
+        <div class="filter-row">
+          <span class="dot-label">显示：</span>
+          <button class="filter active" data-lane="all">全部</button>
+          <button class="filter" data-lane="0">lane 0 · c0—c3</button>
+          <button class="filter" data-lane="1">lane 1 · c4—c7</button>
         </div>
       </div>
+
       <div class="timeline" id="timeline"></div>
+
+      <div class="phase-explain">
+        <div class="phase-card rs">
+          <strong>ReduceScatter · 规约并分散</strong>
+          接收后执行累加与 mask 合并；结束时每个 rank 拥有两个完整 owner chunk。
+        </div>
+        <div class="plus">＋</div>
+        <div class="phase-card ag">
+          <strong>AllGather · 收集并复制</strong>
+          接收后复制完整 ChunkState；结束时每个 rank 都拥有全部8个结果。
+        </div>
+      </div>
     </section>
 
     <section class="panel">
-      <h2>逻辑 Ring 与本步发送</h2>
-      <div class="ring" id="ring"></div>
-      <div class="return-edge" id="return-edge">rank 3 → rank 0（闭合 Ring）</div>
+      <div class="header-row">
+        <div>
+          <h2>Chunk 传递动画</h2>
+          <span class="badge" id="operation-badge">等待开始</span>
+        </div>
+        <div class="legend" id="chunk-legend"></div>
+      </div>
+
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <div class="ring-guide">
+            <div class="ring-guide-return"></div>
+            <span class="guide-label">rank 3 → rank 0 回环路径</span>
+            <div class="ring-guide-line"></div>
+          </div>
+          <div class="rank-columns" id="rank-columns"></div>
+          <div class="flying-layer" id="flying-layer"></div>
+        </div>
+      </div>
+
+      <p class="note" id="stage-note">
+        初始化：每个 rank 都有8个本地贡献。点击“下一步”，观察8个 payload 同时移动。
+      </p>
     </section>
 
     <section class="panel">
-      <h2>各 rank 当前保存的 ChunkState</h2>
-      <div class="rank-grid" id="rank-grid"></div>
-      <p class="note">黄色只表示这个 chunk 最终归该 rank，不代表其他 rank 没有它的局部贡献。最终只检查 owner 位置是否得到完整值和 <code>0x0f</code>。</p>
+      <h2>最近一步的8条消息</h2>
+      <div class="messages" id="messages"></div>
     </section>
 
     <section class="panel">
-      <h2>最近一步的 8 条消息</h2>
-      <div id="messages"></div>
-    </section>
-
-    <section class="panel">
-      <h2>这个页面与真实 NCCL 的边界</h2>
-      <p>页面展示的是当前教学模拟器的逻辑依赖：一次 step 中先快照全部消息，再统一规约。它不展示 GPU kernel、NCCL channel、协议分片、Proxy、网络延迟或真实并发时间。</p>
+      <h2>模型边界</h2>
+      <p>该页面严格对应当前 <code>ring_sim.c</code> 的确定性模型：一个 step 先快照全部发送，再统一应用全部接收。移动方块表示逻辑 payload，不表示真实带宽、GPU kernel、NCCL 协议分片、Proxy 或物理网络时延。</p>
     </section>
   </main>
 
   <script>
     "use strict";
 
-    const RANKS = 4;
-    const CHUNKS = 8;
-    const LANES = CHUNKS / RANKS;
-    const STEPS = RANKS - 1;
+    var RANKS = 4;
+    var CHUNKS = 8;
+    var LANES = CHUNKS / RANKS;
+    var STEPS = RANKS - 1;
+    var TOTAL_TRANSITIONS = STEPS * 2;
+    var EVENTS_PER_TRANSITION = RANKS * LANES * 2;
+    var TOTAL_EVENTS = TOTAL_TRANSITIONS * EVENTS_PER_TRANSITION;
 
-    const inputValue = (rank, chunk) => rank * 10 + chunk + 1;
-    const nextRank = rank => (rank + 1) % RANKS;
-    const sendChunk = (rank, step, lane) =>
-      lane * RANKS + (rank - step - 1 + RANKS) % RANKS;
+    var chunkColors = [
+      "#67d44b", "#f45b74", "#ff9348", "#438ee8",
+      "#f2cf4a", "#28c2aa", "#a879ef", "#f07ac4"
+    ];
 
-    const maskText = mask =>
-      `0x${mask.toString(16).padStart(2, "0")} (${mask.toString(2).padStart(4, "0")})`;
+    var timelineNames = [
+      "初始化",
+      "RS step 0",
+      "RS step 1",
+      "RS step 2",
+      "AG step 0",
+      "AG step 1",
+      "AG step 2"
+    ];
+
+    function inputValue(rank, chunk) {
+      return rank * 10 + chunk + 1;
+    }
+
+    function nextRank(rank) {
+      return (rank + 1) % RANKS;
+    }
+
+    function reduceScatterSendChunk(rank, step, lane) {
+      return lane * RANKS + (rank - step - 1 + RANKS) % RANKS;
+    }
+
+    function allGatherSendChunk(rank, step, lane) {
+      return lane * RANKS + (rank - step + RANKS) % RANKS;
+    }
+
+    function maskText(mask) {
+      return "0x" + mask.toString(16).padStart(2, "0");
+    }
+
+    function maskBits(mask) {
+      return mask.toString(2).padStart(4, "0");
+    }
 
     function initialState() {
-      return Array.from({ length: RANKS }, (_, rank) =>
-        Array.from({ length: CHUNKS }, (_, chunk) => ({
-          value: inputValue(rank, chunk),
-          mask: 1 << rank,
-        }))
-      );
+      return Array.from({ length: RANKS }, function (_, rank) {
+        return Array.from({ length: CHUNKS }, function (_, chunk) {
+          return {
+            value: inputValue(rank, chunk),
+            mask: 1 << rank
+          };
+        });
+      });
     }
 
-    const cloneState = state =>
-      state.map(chunks => chunks.map(chunk => ({ ...chunk })));
+    function cloneState(state) {
+      return state.map(function (chunks) {
+        return chunks.map(function (chunk) {
+          return { value: chunk.value, mask: chunk.mask };
+        });
+      });
+    }
 
-    function buildSimulation() {
-      const states = [initialState()];
-      const transitions = [];
+    function buildTransition(before, phase, step) {
+      var after = cloneState(before);
+      var messages = [];
 
-      for (let step = 0; step < STEPS; step += 1) {
-        const before = states[states.length - 1];
-        const after = cloneState(before);
-        const messages = [];
-
-        for (let src = 0; src < RANKS; src += 1) {
-          for (let lane = 0; lane < LANES; lane += 1) {
-            const chunk = sendChunk(src, step, lane);
-            messages.push({
-              step,
-              lane,
-              src,
-              dst: nextRank(src),
-              chunk,
-              payload: { ...before[src][chunk] },
-            });
-          }
+      for (var src = 0; src < RANKS; src += 1) {
+        for (var lane = 0; lane < LANES; lane += 1) {
+          var chunk = phase === "reduce_scatter"
+            ? reduceScatterSendChunk(src, step, lane)
+            : allGatherSendChunk(src, step, lane);
+          messages.push({
+            phase: phase,
+            step: step,
+            lane: lane,
+            src: src,
+            dst: nextRank(src),
+            chunk: chunk,
+            payload: {
+              value: before[src][chunk].value,
+              mask: before[src][chunk].mask
+            }
+          });
         }
-
-        for (const message of messages) {
-          const destination = after[message.dst][message.chunk];
-          destination.value += message.payload.value;
-          destination.mask |= message.payload.mask;
-          message.result = { ...destination };
-        }
-
-        transitions.push(messages);
-        states.push(after);
       }
 
-      return { states, transitions };
+      messages.forEach(function (message) {
+        var destination = after[message.dst][message.chunk];
+        if (phase === "reduce_scatter") {
+          destination.value += message.payload.value;
+          destination.mask |= message.payload.mask;
+        } else {
+          destination.value = message.payload.value;
+          destination.mask = message.payload.mask;
+        }
+        message.result = {
+          value: destination.value,
+          mask: destination.mask
+        };
+      });
+
+      return {
+        phase: phase,
+        step: step,
+        operation: phase === "reduce_scatter" ? "reduce" : "copy",
+        messages: messages,
+        after: after
+      };
     }
 
-    const simulation = buildSimulation();
-    let stateIndex = 0;
-    let timer = null;
+    function buildSimulation() {
+      var states = [initialState()];
+      var transitions = [];
 
-    const phaseNames = ["初始化", "完成 step 0", "完成 step 1", "完成 step 2"];
+      for (var rsStep = 0; rsStep < STEPS; rsStep += 1) {
+        var rs = buildTransition(
+          states[states.length - 1],
+          "reduce_scatter",
+          rsStep
+        );
+        transitions.push(rs);
+        states.push(rs.after);
+      }
 
-    function recentMessages() {
-      return stateIndex === 0 ? [] : simulation.transitions[stateIndex - 1];
+      for (var agStep = 0; agStep < STEPS; agStep += 1) {
+        var ag = buildTransition(
+          states[states.length - 1],
+          "all_gather",
+          agStep
+        );
+        transitions.push(ag);
+        states.push(ag.after);
+      }
+
+      return { states: states, transitions: transitions };
     }
 
-    function changedAt(rank, chunk) {
-      return recentMessages().some(message =>
-        message.dst === rank && message.chunk === chunk
-      );
+    var simulation = buildSimulation();
+    var stateIndex = 0;
+    var laneFilter = "all";
+    var playing = false;
+    var animating = false;
+    var playTimer = null;
+
+    function selectedLane(lane) {
+      return laneFilter === "all" || Number(laneFilter) === lane;
+    }
+
+    function blockMarkup(chunkId, state, compact) {
+      var label = compact ? "v " : "value ";
+      return [
+        '<div class="chunk-block" style="background:', chunkColors[chunkId], '">',
+          '<div class="chunk-id">c', chunkId, '</div>',
+          '<div class="chunk-data">',
+            label, state.value,
+            '<small>', maskText(state.mask), ' · ', maskBits(state.mask), '</small>',
+          '</div>',
+        '</div>'
+      ].join("");
+    }
+
+    function recentTransition() {
+      return stateIndex === 0
+        ? null
+        : simulation.transitions[stateIndex - 1];
+    }
+
+    function changedChunksByRank() {
+      var changed = Array.from({ length: RANKS }, function () {
+        return new Set();
+      });
+      var transition = recentTransition();
+      if (transition) {
+        transition.messages.forEach(function (message) {
+          changed[message.dst].add(message.chunk);
+        });
+      }
+      return changed;
+    }
+
+    function renderLegend() {
+      var html = [];
+      for (var chunk = 0; chunk < CHUNKS; chunk += 1) {
+        html.push(
+          '<span class="dot-label"><i class="swatch" style="background:',
+          chunkColors[chunk],
+          '"></i>c',
+          chunk,
+          '</span>'
+        );
+      }
+      document.querySelector("#chunk-legend").innerHTML = html.join("");
     }
 
     function renderTimeline() {
-      const names = ["初始化", "step 0", "step 1", "step 2"];
-      document.querySelector("#timeline").innerHTML = names.map((name, index) => {
-        const classes = ["timeline-step"];
-        if (index === stateIndex) classes.push("active");
-        if (index < stateIndex) classes.push("done");
-        return `<div class="${classes.join(" ")}">${index < stateIndex ? "✓ " : ""}${name}</div>`;
-      }).join("");
+      document.querySelector("#timeline").innerHTML =
+        timelineNames.map(function (name, index) {
+          var classes = ["timeline-step"];
+          if (index > 0 && index <= STEPS) classes.push("rs-step");
+          if (index > STEPS) classes.push("ag-step");
+          if (index === stateIndex) classes.push("active");
+          if (index < stateIndex) classes.push("done");
+          return [
+            '<div class="', classes.join(" "), '">',
+            index < stateIndex ? "✓ " : "",
+            name,
+            '</div>'
+          ].join("");
+        }).join("");
     }
 
-    function renderRing(animate) {
-      const messages = recentMessages();
-      const parts = [];
+    function renderStage(highlight) {
+      var state = simulation.states[stateIndex];
+      var changed = changedChunksByRank();
 
-      for (let rank = 0; rank < RANKS; rank += 1) {
-        const sent = messages.filter(message => message.src === rank);
-        parts.push(`
-          <article class="rank-card">
-            <div class="rank-title">
-              <span>rank ${rank}</span>
-              <span class="owns">owns c${rank}, c${rank + RANKS}</span>
-            </div>
-            ${sent.length === 0
-              ? '<div class="idle">尚未发送；每个 chunk 只有本 rank 的贡献。</div>'
-              : `<div class="outbound">${sent.map(message => `
-                  <div class="message-chip l${message.lane}">
-                    lane ${message.lane} · c${message.chunk} → rank ${message.dst}<br>
-                    payload ${message.payload.value} / ${maskText(message.payload.mask)}
-                  </div>`).join("")}</div>`}
-          </article>
-        `);
-        if (rank < RANKS - 1) {
-          parts.push(`<div class="arrow ${animate ? "pulse" : ""}">→</div>`);
-        }
-      }
+      document.querySelector("#rank-columns").innerHTML =
+        state.map(function (chunks, rank) {
+          var rankChanged = highlight && changed[rank].size > 0;
+          var slots = chunks.map(function (chunkState, chunkId) {
+            var lane = Math.floor(chunkId / RANKS);
+            var owner = chunkId % RANKS === rank;
+            var classes = ["chunk-slot"];
+            if (!selectedLane(lane)) classes.push("filtered");
+            if (highlight && changed[rank].has(chunkId)) classes.push("updated");
+            if (owner) classes.push("owner-slot");
+            return [
+              '<div class="', classes.join(" "),
+              '" data-rank="', rank,
+              '" data-chunk="', chunkId,
+              '" data-lane="', lane, '">',
+              owner ? '<span class="owner-star">★ owner</span>' : "",
+              blockMarkup(chunkId, chunkState, false),
+              '</div>'
+            ].join("");
+          }).join("");
 
-      document.querySelector("#ring").innerHTML = parts.join("");
-      document.querySelector("#return-edge").classList.toggle("pulse", animate);
-    }
-
-    function renderStates() {
-      const state = simulation.states[stateIndex];
-      document.querySelector("#rank-grid").innerHTML = state.map((chunks, rank) => `
-        <article class="state-card">
-          <h3>rank ${rank}</h3>
-          <table>
-            <thead><tr><th>chunk</th><th>value</th><th>contributors</th></tr></thead>
-            <tbody>
-              ${chunks.map((chunk, chunkId) => {
-                const lane = Math.floor(chunkId / RANKS);
-                const owner = chunkId % RANKS === rank;
-                const classes = [owner ? "owner" : ""];
-                if (changedAt(rank, chunkId)) classes.push("changed");
-                if (stateIndex === STEPS && owner) classes.push("final-owner");
-                return `<tr class="${classes.join(" ")}">
-                  <td><i class="lane-mark lane-${lane}"></i>c${chunkId}${owner ? " ★" : ""}</td>
-                  <td>${chunk.value}</td>
-                  <td>${maskText(chunk.mask)}</td>
-                </tr>`;
-              }).join("")}
-            </tbody>
-          </table>
-        </article>
-      `).join("");
+          return [
+            '<article class="rank-card', rankChanged ? " changed" : "", '">',
+              '<div class="rank-title">',
+                '<span>rank ', rank, '</span>',
+                '<span class="owner-label">owner：c', rank,
+                '、c', rank + RANKS, '</span>',
+              '</div>',
+              '<div class="chunk-list">', slots, '</div>',
+            '</article>'
+          ].join("");
+        }).join("");
     }
 
     function renderMessages() {
-      const messages = recentMessages();
-      const container = document.querySelector("#messages");
-      if (messages.length === 0) {
-        container.innerHTML = '<p>初始化阶段没有消息。点击“下一步”执行 step 0。</p>';
+      var transition = recentTransition();
+      var container = document.querySelector("#messages");
+
+      if (!transition) {
+        container.innerHTML =
+          '<div class="empty">尚未执行通信。每个 rank 当前保存自己的8个局部贡献。</div>';
         return;
       }
 
-      container.innerHTML = `
-        <table class="message-table">
-          <thead>
-            <tr><th>lane</th><th>路径</th><th>chunk</th><th>payload</th><th>接收后结果</th></tr>
-          </thead>
-          <tbody>${messages.map(message => `
-            <tr class="l${message.lane}">
-              <td>${message.lane}</td>
-              <td>rank ${message.src} → rank ${message.dst}</td>
-              <td>c${message.chunk}</td>
-              <td>${message.payload.value} / ${maskText(message.payload.mask)}</td>
-              <td>${message.result.value} / ${maskText(message.result.mask)}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>`;
+      var operationText = transition.operation === "reduce"
+        ? "累加 + mask OR"
+        : "复制完整 ChunkState";
+      var operationClass = transition.operation === "reduce"
+        ? "operation-reduce"
+        : "operation-copy";
+
+      container.innerHTML = [
+        '<table>',
+          '<thead><tr>',
+            '<th>lane</th><th>路径</th><th>chunk</th>',
+            '<th>发送 payload</th><th>接收操作</th><th>接收后状态</th>',
+          '</tr></thead>',
+          '<tbody>',
+          transition.messages.map(function (message) {
+            return [
+              '<tr class="lane-', message.lane, '">',
+                '<td>', message.lane, '</td>',
+                '<td>rank ', message.src, ' → rank ', message.dst, '</td>',
+                '<td style="color:', chunkColors[message.chunk], '">c',
+                  message.chunk, '</td>',
+                '<td>', message.payload.value, ' / ',
+                  maskText(message.payload.mask), '</td>',
+                '<td class="', operationClass, '">', operationText, '</td>',
+                '<td>', message.result.value, ' / ',
+                  maskText(message.result.mask), '</td>',
+              '</tr>'
+            ].join("");
+          }).join(""),
+          '</tbody>',
+        '</table>'
+      ].join("");
     }
 
-    function render(animate = false) {
-      document.querySelector("#phase").textContent = phaseNames[stateIndex];
-      document.querySelector("#summary").textContent = stateIndex === 0
-        ? "32 个本地贡献，尚未规约"
-        : `最近一步处理 ${RANKS * LANES} 条消息；已完成 ${stateIndex}/${STEPS} 步`;
-      document.querySelector("#prev").disabled = stateIndex === 0;
-      document.querySelector("#next").disabled = stateIndex === STEPS;
+    function renderStatus() {
+      var phaseBadge = document.querySelector("#phase-badge");
+      var operationBadge = document.querySelector("#operation-badge");
+      phaseBadge.className = "badge";
+
+      if (stateIndex === 0) {
+        phaseBadge.textContent = "初始化";
+        operationBadge.textContent = "等待开始";
+      } else if (stateIndex <= STEPS) {
+        phaseBadge.textContent = "ReduceScatter";
+        phaseBadge.classList.add("rs");
+        operationBadge.textContent =
+          "接收后累加 · 已完成 step " + (stateIndex - 1);
+      } else if (stateIndex < TOTAL_TRANSITIONS) {
+        phaseBadge.textContent = "AllGather";
+        phaseBadge.classList.add("ag");
+        operationBadge.textContent =
+          "接收后复制 · 已完成 step " + (stateIndex - STEPS - 1);
+      } else {
+        phaseBadge.textContent = "AllReduce 完成";
+        phaseBadge.classList.add("done");
+        operationBadge.textContent = "四个 rank 均拥有全部8个规约结果";
+      }
+
+      document.querySelector("#step-badge").textContent =
+        "状态 " + stateIndex + "/" + TOTAL_TRANSITIONS;
+      document.querySelector("#event-badge").textContent =
+        "已产生 " + (stateIndex * EVENTS_PER_TRANSITION) +
+        "/" + TOTAL_EVENTS + " 条事件";
+
+      var note = document.querySelector("#stage-note");
+      if (stateIndex === 0) {
+        note.textContent =
+          "初始化：每个 rank 都有8个本地贡献。点击“下一步”，观察8个 payload 同时移动。";
+      } else if (stateIndex <= STEPS) {
+        note.textContent =
+          "ReduceScatter：移动方块携带发送时的快照；到达后与目标位置相加。三个 step 后只看 owner 位置。";
+      } else if (stateIndex < TOTAL_TRANSITIONS) {
+        note.textContent =
+          "AllGather：移动方块已经是完整规约结果；到达后直接覆盖目标位置，不再相加。";
+      } else {
+        note.textContent =
+          "完成：每个 rank 的 c0—c7 都相同，value 分别为 64、68、72、76、80、84、88、92，mask 全部为 0x0f。";
+      }
+    }
+
+    function updateControls() {
+      document.querySelector("#prev").disabled =
+        animating || stateIndex === 0;
+      document.querySelector("#next").disabled =
+        animating || stateIndex === TOTAL_TRANSITIONS;
+      document.querySelector("#reset").disabled = animating;
+      document.querySelector("#speed").disabled = animating;
+      document.querySelectorAll(".filter").forEach(function (button) {
+        button.disabled = animating;
+      });
+      document.querySelector("#play").textContent =
+        playing ? "暂停" : "自动播放";
+    }
+
+    function render(highlight) {
       renderTimeline();
-      renderRing(animate);
-      renderStates();
+      renderStage(Boolean(highlight));
       renderMessages();
+      renderStatus();
+      updateControls();
+    }
+
+    function createFlyingBlock(message, duration) {
+      if (!selectedLane(message.lane)) return null;
+
+      var stage = document.querySelector("#stage");
+      var layer = document.querySelector("#flying-layer");
+      var source = document.querySelector(
+        '.chunk-slot[data-rank="' + message.src +
+        '"][data-chunk="' + message.chunk + '"]'
+      );
+      var destination = document.querySelector(
+        '.chunk-slot[data-rank="' + message.dst +
+        '"][data-chunk="' + message.chunk + '"]'
+      );
+      if (!source || !destination) return null;
+
+      var stageRect = stage.getBoundingClientRect();
+      var sourceRect = source.getBoundingClientRect();
+      var destinationRect = destination.getBoundingClientRect();
+      var width = Math.min(sourceRect.width - 10, 190);
+      var startX = sourceRect.left - stageRect.left +
+        (sourceRect.width - width) / 2;
+      var startY = sourceRect.top - stageRect.top + 3;
+      var endX = destinationRect.left - stageRect.left +
+        (destinationRect.width - width) / 2;
+      var endY = destinationRect.top - stageRect.top + 3;
+      var dx = endX - startX;
+      var dy = endY - startY;
+
+      var flying = document.createElement("div");
+      flying.className = "flying-chunk";
+      flying.style.left = startX + "px";
+      flying.style.top = startY + "px";
+      flying.style.width = width + "px";
+      flying.style.background = chunkColors[message.chunk];
+      flying.innerHTML = [
+        '<div class="chunk-id">c', message.chunk, '</div>',
+        '<div class="chunk-data">v ', message.payload.value,
+        '<small>', maskText(message.payload.mask), '</small></div>'
+      ].join("");
+      layer.appendChild(flying);
+
+      var label = document.createElement("div");
+      label.className = "flight-label";
+      label.textContent =
+        "r" + message.src + "→r" + message.dst;
+      label.style.left = (startX + width / 2 - 23) + "px";
+      label.style.top = (startY - 20) + "px";
+      layer.appendChild(label);
+
+      var keyframes;
+      if (message.src === RANKS - 1 && message.dst === 0) {
+        keyframes = [
+          { transform: "translate(0, 0) scale(.9)", offset: 0 },
+          {
+            transform:
+              "translate(" + (dx * .5) + "px, -145px) scale(1.05)",
+            offset: .5
+          },
+          {
+            transform:
+              "translate(" + dx + "px, " + dy + "px) scale(.95)",
+            offset: 1
+          }
+        ];
+      } else {
+        keyframes = [
+          { transform: "translate(0, 0) scale(.9)", offset: 0 },
+          {
+            transform:
+              "translate(" + (dx * .5) + "px, " + (dy - 18) + "px) scale(1.05)",
+            offset: .5
+          },
+          {
+            transform:
+              "translate(" + dx + "px, " + dy + "px) scale(.95)",
+            offset: 1
+          }
+        ];
+      }
+
+      var flight = flying.animate(keyframes, {
+        duration: duration,
+        easing: "cubic-bezier(.35,.05,.2,1)",
+        fill: "forwards"
+      });
+
+      var labelFlight = label.animate(keyframes, {
+        duration: duration,
+        easing: "cubic-bezier(.35,.05,.2,1)",
+        fill: "forwards"
+      });
+
+      return Promise.all([flight.finished, labelFlight.finished]).then(
+        function () {
+          flying.remove();
+          label.remove();
+        }
+      );
+    }
+
+    function transitionDuration() {
+      var speed = Number(document.querySelector("#speed").value);
+      return Math.round(1250 / speed);
+    }
+
+    function animateNext() {
+      if (animating || stateIndex >= TOTAL_TRANSITIONS) {
+        return Promise.resolve();
+      }
+
+      animating = true;
+      updateControls();
+
+      var transition = simulation.transitions[stateIndex];
+      var duration = transitionDuration();
+      var flights = transition.messages.map(function (message) {
+        return createFlyingBlock(message, duration);
+      }).filter(Boolean);
+
+      return Promise.all(flights).then(function () {
+        stateIndex += 1;
+        animating = false;
+        render(true);
+      });
     }
 
     function stopPlaying() {
-      if (timer !== null) {
-        window.clearInterval(timer);
-        timer = null;
+      playing = false;
+      if (playTimer !== null) {
+        window.clearTimeout(playTimer);
+        playTimer = null;
       }
-      document.querySelector("#play").textContent = "自动播放";
+      updateControls();
     }
 
-    document.querySelector("#next").addEventListener("click", () => {
-      if (stateIndex < STEPS) {
-        stateIndex += 1;
-        render(true);
-      }
-    });
-
-    document.querySelector("#prev").addEventListener("click", () => {
-      stopPlaying();
-      if (stateIndex > 0) {
-        stateIndex -= 1;
-        render();
-      }
-    });
-
-    document.querySelector("#reset").addEventListener("click", () => {
-      stopPlaying();
-      stateIndex = 0;
-      render();
-    });
-
-    document.querySelector("#play").addEventListener("click", () => {
-      if (timer !== null) {
+    function scheduleAutoplay() {
+      if (!playing) return;
+      if (stateIndex >= TOTAL_TRANSITIONS) {
         stopPlaying();
         return;
       }
-      if (stateIndex === STEPS) stateIndex = 0;
-      document.querySelector("#play").textContent = "暂停";
-      render();
-      timer = window.setInterval(() => {
-        if (stateIndex === STEPS) {
-          stopPlaying();
-          return;
-        }
-        stateIndex += 1;
-        render(true);
-      }, 1500);
+
+      animateNext().then(function () {
+        if (!playing) return;
+        playTimer = window.setTimeout(
+          scheduleAutoplay,
+          Math.max(180, Math.round(420 / Number(
+            document.querySelector("#speed").value
+          )))
+        );
+      });
+    }
+
+    document.querySelector("#next").addEventListener("click", function () {
+      stopPlaying();
+      animateNext();
     });
 
-    render();
+    document.querySelector("#prev").addEventListener("click", function () {
+      stopPlaying();
+      if (!animating && stateIndex > 0) {
+        stateIndex -= 1;
+        render(false);
+      }
+    });
+
+    document.querySelector("#reset").addEventListener("click", function () {
+      stopPlaying();
+      stateIndex = 0;
+      document.querySelector("#flying-layer").innerHTML = "";
+      render(false);
+    });
+
+    document.querySelector("#play").addEventListener("click", function () {
+      if (playing) {
+        stopPlaying();
+        return;
+      }
+      if (stateIndex === TOTAL_TRANSITIONS) {
+        stateIndex = 0;
+        render(false);
+      }
+      playing = true;
+      updateControls();
+      scheduleAutoplay();
+    });
+
+    document.querySelectorAll(".filter").forEach(function (button) {
+      button.addEventListener("click", function () {
+        laneFilter = button.dataset.lane;
+        document.querySelectorAll(".filter").forEach(function (candidate) {
+          candidate.classList.toggle(
+            "active",
+            candidate.dataset.lane === laneFilter
+          );
+        });
+        renderStage(false);
+      });
+    });
+
+    renderLegend();
+    render(false);
   </script>
 </body>
 </html>

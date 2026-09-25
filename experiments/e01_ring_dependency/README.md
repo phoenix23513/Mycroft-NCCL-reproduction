@@ -1,8 +1,8 @@
 # E01 — Ring 依赖模拟器
 
-Day 05 只实现 4-rank、8-chunk、单 channel Ring 的 ReduceScatter。这里是独立实现，不迁移旧 E01 代码，也不调用 GPU、NCCL、线程或网络。
+Day 05 实现 ReduceScatter；Day 06 在同一个 4-rank、8-chunk、单 channel 模型上补全 AllGather 和 JSONL 事件。这里不调用 GPU、NCCL、线程或网络。
 
-交互式过程可直接用浏览器打开 `visualizer.html`。它是当前固定模拟的离线教学视图，不代表真实 NCCL/GPU 时间线。
+交互式过程可直接用浏览器打开 `visualizer.html`。它用移动的 chunk 方块完整展示 ReduceScatter 与 AllGather，仍是固定模拟的离线教学视图，不代表真实 NCCL/GPU 时间线。
 
 ## 固定输入与结果
 
@@ -94,3 +94,48 @@ ctest --test-dir .build-asan -R e01_reduce_scatter --output-on-failure
 - 重复或乱序 step 被拒绝；
 - 普通测试、全仓库回归和 AddressSanitizer 均通过；
 - `visualizer.html` 用于逐步检查消息、部分结果和最终 owner 状态。
+
+## Day 06 实现与验证
+
+在 `src/ring_sim.c` 中完成以下四个 TODO：
+
+1. `ring_all_gather_send_chunk`；
+2. `ring_all_gather_recv_chunk`；
+3. `ring_all_gather_step`；
+4. `ring_run_all_gather`。
+
+AllGather 的每个 step 仍先快照全部发送，再应用全部接收；接收方复制完整的 `ChunkState`，不能再做加法。`record_event` 中的 ReduceScatter 调用是事件记录示例，AllGather 应按相同顺序记录：先记录全部 `send`，再记录全部 `recv`。
+
+每条 JSONL 事件包含：
+
+```text
+op_seq, rank, channel, phase, step, chunk, action, peer,
+timestamp, value, contributor_mask
+```
+
+`timestamp` 是从 0 开始递增的逻辑时间，不是系统时钟。
+
+构建后先观察预期失败：
+
+```bash
+cmake -S . -B .build
+cmake --build .build
+ctest --test-dir .build -R 'e01_all_gather|e01_trace_jsonl' --output-on-failure
+```
+
+完成 TODO 后运行：
+
+```bash
+./.build/experiments/e01_ring_dependency/e01_ring_sim
+./.build/experiments/e01_ring_dependency/e01_ring_sim --jsonl
+./scripts/check.sh
+```
+
+最终应有 96 条 JSONL 事件，且每个 rank 都持有相同的 8 个完整规约 chunk。
+
+验证结果：
+
+- ReduceScatter 与 AllGather 各三个 step 通过；
+- 四个 rank 最终拥有相同的8个完整结果，mask 均为 `0x0f`；
+- 96 条 JSONL 事件可独立解析，缺失或交换必要事件会被拒绝；
+- 普通测试、全仓库回归、AddressSanitizer 和浏览器动画验收通过。

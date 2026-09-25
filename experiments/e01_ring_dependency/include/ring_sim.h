@@ -10,6 +10,10 @@ enum {
     RING_CHUNKS = 8,
     RING_CHUNKS_PER_RANK = RING_CHUNKS / RING_RANKS,
     RING_STEPS = RING_RANKS - 1,
+    RING_PHASES = 2,
+    RING_ACTIONS_PER_MESSAGE = 2,
+    RING_MAX_TRACE_EVENTS = RING_PHASES * RING_STEPS * RING_RANKS *
+                            RING_CHUNKS_PER_RANK * RING_ACTIONS_PER_MESSAGE,
 };
 
 typedef enum {
@@ -33,16 +37,25 @@ typedef struct {
 typedef struct {
     ChunkState chunks[RING_RANKS][RING_CHUNKS];
     TraceEvent history[RING_STEPS][RING_RANKS][RING_CHUNKS_PER_RANK];
+    TraceEvent events[RING_MAX_TRACE_EVENTS];
+    int event_count;
+    uint64_t next_timestamp;
     int completed_steps;
+    int completed_all_gather_steps;
 } RingSim;
 
 int ring_next_rank(int rank);
 int ring_prev_rank(int rank);
 int ring_send_chunk(int rank, int step, int lane);
 int ring_recv_chunk(int rank, int step, int lane);
+int ring_all_gather_send_chunk(int rank, int step, int lane);
+int ring_all_gather_recv_chunk(int rank, int step, int lane);
 
 RingStatus ring_sim_init(RingSim *sim);
 RingStatus ring_reduce_scatter_step(RingSim *sim, int step);
 RingStatus ring_run_reduce_scatter(RingSim *sim);
+RingStatus ring_all_gather_step(RingSim *sim, int step);
+RingStatus ring_run_all_gather(RingSim *sim);
+RingStatus ring_run_all_reduce(RingSim *sim);
 
 #endif
