@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>E01 Ring ReduceScatter 可视化</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: #0d1b2d;
+      --panel-2: #12243a;
+      --line: #29415f;
+      --text: #edf6ff;
+      --muted: #9bb0c8;
+      --lane-0: #38bdf8;
+      --lane-1: #c084fc;
+      --success: #4ade80;
+      --warning: #fbbf24;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 1040px;
+      background:
+        radial-gradient(circle at 15% 0%, #14345a 0, transparent 32%),
+        radial-gradient(circle at 90% 10%, #39205a 0, transparent 28%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    main { max-width: 1500px; margin: 0 auto; padding: 28px; }
+
+    h1 { margin: 0 0 8px; font-size: 30px; }
+    h2 { margin: 0 0 16px; font-size: 19px; }
+    p { color: var(--muted); line-height: 1.65; }
+
+    .panel {
+      margin-top: 18px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      box-shadow: 0 18px 50px rgb(0 0 0 / 22%);
+    }
+
+    .header-row, .controls, .legend, .timeline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .header-row { justify-content: space-between; }
+
+    button {
+      border: 1px solid #3c5877;
+      border-radius: 10px;
+      padding: 9px 14px;
+      background: #172b44;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 650;
+    }
+
+    button:hover:not(:disabled) { background: #203c5e; }
+    button:disabled { cursor: not-allowed; opacity: .38; }
+    button.primary { border-color: #0284c7; background: #0369a1; }
+
+    .badge, .dot-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #172b44;
+      color: #cfe4fa;
+      font-size: 13px;
+    }
+
+    .swatch { width: 10px; height: 10px; border-radius: 50%; }
+    .lane-0 { background: var(--lane-0); }
+    .lane-1 { background: var(--lane-1); }
+    .owner-swatch { background: var(--warning); }
+    .changed-swatch { background: var(--success); }
+
+    .timeline { margin-top: 18px; }
+    .timeline-step {
+      flex: 1;
+      min-width: 150px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .timeline-step.active {
+      border-color: var(--success);
+      background: rgb(74 222 128 / 10%);
+      color: var(--text);
+    }
+    .timeline-step.done { color: var(--success); }
+
+    .ring {
+      display: grid;
+      grid-template-columns: 1fr 72px 1fr 72px 1fr 72px 1fr;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .rank-card {
+      min-height: 170px;
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel-2);
+    }
+
+    .rank-title { display: flex; justify-content: space-between; font-weight: 750; }
+    .owns { color: var(--warning); font-size: 12px; }
+    .outbound { margin-top: 14px; display: grid; gap: 8px; }
+    .message-chip {
+      padding: 8px;
+      border-radius: 9px;
+      color: #06111d;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .message-chip.l0 { background: var(--lane-0); }
+    .message-chip.l1 { background: var(--lane-1); }
+    .idle { margin-top: 22px; color: var(--muted); font-size: 13px; }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: #5f7c9d;
+      font-size: 34px;
+    }
+    .arrow.pulse { animation: pulse 700ms ease-out; }
+    @keyframes pulse {
+      0% { color: var(--success); transform: translateX(-8px) scale(.8); }
+      60% { color: var(--success); transform: translateX(8px) scale(1.15); }
+      100% { color: #5f7c9d; transform: translateX(0) scale(1); }
+    }
+
+    .return-edge {
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px dashed #47698d;
+      border-radius: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .rank-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .state-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0a1727;
+    }
+    .state-card h3 { margin: 0; padding: 12px 14px; background: #142840; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #1d344e; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 650; }
+    tr:last-child td { border-bottom: 0; }
+    tr.owner td:first-child { color: var(--warning); font-weight: 750; }
+    tr.changed { background: rgb(74 222 128 / 9%); }
+    tr.final-owner { box-shadow: inset 3px 0 var(--success); }
+    .lane-mark { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
+
+    .message-table td { white-space: nowrap; }
+    .message-table tr.l0 td:first-child { border-left: 3px solid var(--lane-0); }
+    .message-table tr.l1 td:first-child { border-left: 3px solid var(--lane-1); }
+
+    code { color: #d7ecff; }
+    .note { margin: 16px 0 0; padding: 12px 14px; border-left: 3px solid var(--warning); background: rgb(251 191 36 / 8%); }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="header-row">
+      <div>
+        <h1>4-rank / 8-chunk Ring ReduceScatter</h1>
+        <p>与 <code>ring_sim.c</code> 的固定输入、两条 lane 和三步同步调度一致。</p>
+      </div>
+      <div class="controls">
+        <button id="reset">重置</button>
+        <button id="prev">上一步</button>
+        <button id="next" class="primary">下一步</button>
+        <button id="play">自动播放</button>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div class="header-row">
+        <div>
+          <span class="badge" id="phase"></span>
+          <span class="badge" id="summary"></span>
+        </div>
+        <div class="legend">
+          <span class="dot-label"><i class="swatch lane-0"></i>lane 0：chunk 0—3</span>
+          <span class="dot-label"><i class="swatch lane-1"></i>lane 1：chunk 4—7</span>
+          <span class="dot-label"><i class="swatch owner-swatch"></i>最终 owner</span>
+          <span class="dot-label"><i class="swatch changed-swatch"></i>本步更新</span>
+        </div>
+      </div>
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <section class="panel">
+      <h2>逻辑 Ring 与本步发送</h2>
+      <div class="ring" id="ring"></div>
+      <div class="return-edge" id="return-edge">rank 3 → rank 0（闭合 Ring）</div>
+    </section>
+
+    <section class="panel">
+      <h2>各 rank 当前保存的 ChunkState</h2>
+      <div class="rank-grid" id="rank-grid"></div>
+      <p class="note">黄色只表示这个 chunk 最终归该 rank，不代表其他 rank 没有它的局部贡献。最终只检查 owner 位置是否得到完整值和 <code>0x0f</code>。</p>
+    </section>
+
+    <section class="panel">
+      <h2>最近一步的 8 条消息</h2>
+      <div id="messages"></div>
+    </section>
+
+    <section class="panel">
+      <h2>这个页面与真实 NCCL 的边界</h2>
+      <p>页面展示的是当前教学模拟器的逻辑依赖：一次 step 中先快照全部消息，再统一规约。它不展示 GPU kernel、NCCL channel、协议分片、Proxy、网络延迟或真实并发时间。</p>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+
+    const RANKS = 4;
+    const CHUNKS = 8;
+    const LANES = CHUNKS / RANKS;
+    const STEPS = RANKS - 1;
+
+    const inputValue = (rank, chunk) => rank * 10 + chunk + 1;
+    const nextRank = rank => (rank + 1) % RANKS;
+    const sendChunk = (rank, step, lane) =>
+      lane * RANKS + (rank - step - 1 + RANKS) % RANKS;
+
+    const maskText = mask =>
+      `0x${mask.toString(16).padStart(2, "0")} (${mask.toString(2).padStart(4, "0")})`;
+
+    function initialState() {
+      return Array.from({ length: RANKS }, (_, rank) =>
+        Array.from({ length: CHUNKS }, (_, chunk) => ({
+          value: inputValue(rank, chunk),
+          mask: 1 << rank,
+        }))
+      );
+    }
+
+    const cloneState = state =>
+      state.map(chunks => chunks.map(chunk => ({ ...chunk })));
+
+    function buildSimulation() {
+      const states = [initialState()];
+      const transitions = [];
+
+      for (let step = 0; step < STEPS; step += 1) {
+        const before = states[states.length - 1];
+        const after = cloneState(before);
+        const messages = [];
+
+        for (let src = 0; src < RANKS; src += 1) {
+          for (let lane = 0; lane < LANES; lane += 1) {
+            const chunk = sendChunk(src, step, lane);
+            messages.push({
+              step,
+              lane,
+              src,
+              dst: nextRank(src),
+              chunk,
+              payload: { ...before[src][chunk] },
+            });
+          }
+        }
+
+        for (const message of messages) {
+          const destination = after[message.dst][message.chunk];
+          destination.value += message.payload.value;
+          destination.mask |= message.payload.mask;
+          message.result = { ...destination };
+        }
+
+        transitions.push(messages);
+        states.push(after);
+      }
+
+      return { states, transitions };
+    }
+
+    const simulation = buildSimulation();
+    let stateIndex = 0;
+    let timer = null;
+
+    const phaseNames = ["初始化", "完成 step 0", "完成 step 1", "完成 step 2"];
+
+    function recentMessages() {
+      return stateIndex === 0 ? [] : simulation.transitions[stateIndex - 1];
+    }
+
+    function changedAt(rank, chunk) {
+      return recentMessages().some(message =>
+        message.dst === rank && message.chunk === chunk
+      );
+    }
+
+    function renderTimeline() {
+      const names = ["初始化", "step 0", "step 1", "step 2"];
+      document.querySelector("#timeline").innerHTML = names.map((name, index) => {
+        const classes = ["timeline-step"];
+        if (index === stateIndex) classes.push("active");
+        if (index < stateIndex) classes.push("done");
+        return `<div class="${classes.join(" ")}">${index < stateIndex ? "✓ " : ""}${name}</div>`;
+      }).join("");
+    }
+
+    function renderRing(animate) {
+      const messages = recentMessages();
+      const parts = [];
+
+      for (let rank = 0; rank < RANKS; rank += 1) {
+        const sent = messages.filter(message => message.src === rank);
+        parts.push(`
+          <article class="rank-card">
+            <div class="rank-title">
+              <span>rank ${rank}</span>
+              <span class="owns">owns c${rank}, c${rank + RANKS}</span>
+            </div>
+            ${sent.length === 0
+              ? '<div class="idle">尚未发送；每个 chunk 只有本 rank 的贡献。</div>'
+              : `<div class="outbound">${sent.map(message => `
+                  <div class="message-chip l${message.lane}">
+                    lane ${message.lane} · c${message.chunk} → rank ${message.dst}<br>
+                    payload ${message.payload.value} / ${maskText(message.payload.mask)}
+                  </div>`).join("")}</div>`}
+          </article>
+        `);
+        if (rank < RANKS - 1) {
+          parts.push(`<div class="arrow ${animate ? "pulse" : ""}">→</div>`);
+        }
+      }
+
+      document.querySelector("#ring").innerHTML = parts.join("");
+      document.querySelector("#return-edge").classList.toggle("pulse", animate);
+    }
+
+    function renderStates() {
+      const state = simulation.states[stateIndex];
+      document.querySelector("#rank-grid").innerHTML = state.map((chunks, rank) => `
+        <article class="state-card">
+          <h3>rank ${rank}</h3>
+          <table>
+            <thead><tr><th>chunk</th><th>value</th><th>contributors</th></tr></thead>
+            <tbody>
+              ${chunks.map((chunk, chunkId) => {
+                const lane = Math.floor(chunkId / RANKS);
+                const owner = chunkId % RANKS === rank;
+                const classes = [owner ? "owner" : ""];
+                if (changedAt(rank, chunkId)) classes.push("changed");
+                if (stateIndex === STEPS && owner) classes.push("final-owner");
+                return `<tr class="${classes.join(" ")}">
+                  <td><i class="lane-mark lane-${lane}"></i>c${chunkId}${owner ? " ★" : ""}</td>
+                  <td>${chunk.value}</td>
+                  <td>${maskText(chunk.mask)}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </article>
+      `).join("");
+    }
+
+    function renderMessages() {
+      const messages = recentMessages();
+      const container = document.querySelector("#messages");
+      if (messages.length === 0) {
+        container.innerHTML = '<p>初始化阶段没有消息。点击“下一步”执行 step 0。</p>';
+        return;
+      }
+
+      container.innerHTML = `
+        <table class="message-table">
+          <thead>
+            <tr><th>lane</th><th>路径</th><th>chunk</th><th>payload</th><th>接收后结果</th></tr>
+          </thead>
+          <tbody>${messages.map(message => `
+            <tr class="l${message.lane}">
+              <td>${message.lane}</td>
+              <td>rank ${message.src} → rank ${message.dst}</td>
+              <td>c${message.chunk}</td>
+              <td>${message.payload.value} / ${maskText(message.payload.mask)}</td>
+              <td>${message.result.value} / ${maskText(message.result.mask)}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>`;
+    }
+
+    function render(animate = false) {
+      document.querySelector("#phase").textContent = phaseNames[stateIndex];
+      document.querySelector("#summary").textContent = stateIndex === 0
+        ? "32 个本地贡献，尚未规约"
+        : `最近一步处理 ${RANKS * LANES} 条消息；已完成 ${stateIndex}/${STEPS} 步`;
+      document.querySelector("#prev").disabled = stateIndex === 0;
+      document.querySelector("#next").disabled = stateIndex === STEPS;
+      renderTimeline();
+      renderRing(animate);
+      renderStates();
+      renderMessages();
+    }
+
+    function stopPlaying() {
+      if (timer !== null) {
+        window.clearInterval(timer);
+        timer = null;
+      }
+      document.querySelector("#play").textContent = "自动播放";
+    }
+
+    document.querySelector("#next").addEventListener("click", () => {
+      if (stateIndex < STEPS) {
+        stateIndex += 1;
+        render(true);
+      }
+    });
+
+    document.querySelector("#prev").addEventListener("click", () => {
+      stopPlaying();
+      if (stateIndex > 0) {
+        stateIndex -= 1;
+        render();
+      }
+    });
+
+    document.querySelector("#reset").addEventListener("click", () => {
+      stopPlaying();
+      stateIndex = 0;
+      render();
+    });
+
+    document.querySelector("#play").addEventListener("click", () => {
+      if (timer !== null) {
+        stopPlaying();
+        return;
+      }
+      if (stateIndex === STEPS) stateIndex = 0;
+      document.querySelector("#play").textContent = "暂停";
+      render();
+      timer = window.setInterval(() => {
+        if (stateIndex === STEPS) {
+          stopPlaying();
+          return;
+        }
+        stateIndex += 1;
+        render(true);
+      }, 1500);
+    });
+
+    render();
+  </script>
+</body>
+</html>

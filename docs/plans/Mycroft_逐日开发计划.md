@@ -6,7 +6,7 @@
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：Day 04 已验证、待提交；Crater 单 Pod 单 GPU 基线已通过，Day 05 尚未开始
+- 当前状态：Day 05 已验证；4-rank、8-chunk Ring ReduceScatter 与内存检查通过，Day 06 尚未开始
 
 ## 1. 计划要解决的问题
 
@@ -326,9 +326,9 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 
 ### Day 05：E01 数据模型与 ReduceScatter
 
-**实际问题**：用代码证明一个 chunk 怎样沿固定 Ring 被逐步规约。
+**实际问题**：用代码证明多个 chunk 怎样沿固定 Ring 被逐步规约，并验证 rank 数量与 chunk 数量是两个独立概念。
 
-**最小补充知识**：4-rank 单 channel Ring、chunk owner、step、同步轮次；结构体、结构体指针和数组的生命周期。
+**最小补充知识**：4-rank、8-chunk 单 channel Ring，chunk lane、chunk owner、step、同步轮次；结构体、结构体指针和数组的生命周期。
 
 **文件框架**：
 
@@ -345,11 +345,11 @@ experiments/e01_ring_dependency/
 
 **Codex 搭建**：输入结构、函数声明、固定 4-rank fixture、失败测试和 CLI 骨架。
 
-**用户核心逻辑**：初始化 chunk、计算发送/接收 rank、实现三个 ReduceScatter step，并保存每个 step 的状态。
+**用户核心逻辑**：初始化 chunk、计算发送/接收 rank、为两条 chunk lane 实现三个 ReduceScatter step，并保存每个 step 的状态。
 
 **验收与预期现象**：
 
-- ReduceScatter 后每个 rank 恰好持有一个完成规约的 chunk；
+- ReduceScatter 后每个 rank 恰好持有两个完成规约的 chunk；
 - chunk owner 和直接求和结果一致；
 - AddressSanitizer/基本内存检查无越界。
 
