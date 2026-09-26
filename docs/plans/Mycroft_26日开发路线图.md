@@ -1,12 +1,13 @@
-# Mycroft 逐日开发计划
+# Mycroft 26 日开发路线图
 
-- 版本：v0.2（已确认；Crater 基础前置）
-- 依据计划：`Mycroft_复现冻结计划.md` v1.0
+- 版本：v0.3（统一规则、计划职责与当前执行状态）
+- 当前规则：仓库根目录 `AGENTS.md`
+- 历史版本：v0.1/v0.2 的完整内容保留在 Git 历史中，关键变更见第 15 节
 - NCCL 目标版本：2.21.5
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：Day 07 已通过代码、样例和理解验收；Day 08 尚未开始
+- 当前状态：Day 07 已通过代码、样例和理解验收；Day 08 正常三阶段状态机框架已建立，三个 actor 待实现
 
 ## 1. 计划要解决的问题
 
@@ -14,9 +15,9 @@
 
 每天只完成一个有明确边界的子任务，并在验收通过后形成至少一个可运行 commit。解释过、阅读过或通过自测均不等于完成；只有代码、自动测试、固定演示和运行证据一致时，子任务才算通过。
 
-本计划不替代冻结计划。冻结计划继续控制 E01—E06 的研究边界，本计划只把它展开成可执行的每日开发任务。
+本文是当前唯一的开发路线与动态进度文档：第 2 节定义 E01—E06 范围，其余章节把范围展开为每日任务。稳定的协作、Git、文档和安全规则统一由 `AGENTS.md` 管理；历史计划不再约束当前执行。
 
-## 2. 冻结的项目范围
+## 2. 当前项目范围与完成定义
 
 ### 2.1 必须完成
 
@@ -59,7 +60,7 @@
 - 不系统学习 Kubernetes 管理、Crater 部署或 RDMA verbs；
 - 不承诺硬件破坏性故障注入、网卡限速、PCIe 降级或 GPU 限功率；
 - 不把当前 `参考答案/` 作为设计、实现或测试输入；
-- 不把当前 E01 C 程序迁入新仓库，它只留在旧目录作为历史草稿。
+- 不迁移旧学习目录中的 E01 C 草稿；本仓库 `experiments/e01_ring_dependency/` 是从零建立并验收的新实现。
 
 ### 2.3 完成状态
 
@@ -72,7 +73,9 @@
 
 L1 只有在 Day 17 通过后完成。L2 只有在 Day 26 的 Crater 多机真实验证通过后完成；仅完成代码或仅能编译时必须标为“L2 实现完成，集群验证未完成”。
 
-## 3. 结对开发契约
+## 3. 任务执行方式
+
+本节只描述逐日任务如何启动和验收；若具体措辞与 `AGENTS.md` 或用户最新明确指令冲突，以后两者为准。
 
 ### 3.1 每日开始方式
 
@@ -89,16 +92,16 @@ Codex 先提供当天任务卡，并在用户确认任务边界后才修改骨�
 
 ### 3.2 分工
 
-Codex 可以完成：
+默认由 Codex 优先搭建：
 
 - 目录、构建配置和接口声明；
 - 测试框架、固定输入、fixtures 和失败断言；
 - CLI 参数解析骨架；
-- README/实验报告模板；
+- 必要的实验 README 小节和可公开的小型结果样例；
 - 空实现、明确的 `TODO` 和错误返回；
-- 经用户明确要求后的代码审查与局部修复。
+- 用户明确要求时，直接实现、补全或修复核心逻辑。
 
-用户负责完成：
+默认由用户参与推导和验收：
 
 - Ring step/chunk 数据传播；
 - 因果依赖和延迟传播；
@@ -107,6 +110,8 @@ Codex 可以完成：
 - 循环缓冲区并发、覆盖和序号逻辑；
 - NCCL 2.21.5 真实字段确认与插桩更新；
 - Crater 页面配置、作业提交、日志查看和最终验收。
+
+以上是默认教学分工，不是代码权限边界。用户可以随时要求 Codex 实现某个函数；实现后仍需讲清数据流、状态变化和验收证据。
 
 ### 3.3 逐级提示
 
@@ -132,32 +137,32 @@ Codex 可以完成：
 1. 30—45 分钟：理解任务、接口、输入输出和验收；
 2. 2.5—3 小时：实现核心逻辑；
 3. 30—60 分钟：调试和自动测试；
-4. 30 分钟：固定演示、README、开发日志和 Git diff；
-5. 最后：提交并 push 一个可运行 commit。
+4. 30 分钟：固定演示、必要的 README 更新和 Git diff；
+5. 最后：验收通过并得到用户明确指令后创建可运行 commit；push 默认由用户执行。
 
 每天结束时必须存在：
 
 - 可运行代码；
 - 自动测试或确定性的验证脚本；
 - README 中的运行命令；
-- `docs/devlog/day-XX.md` 中的简短证据；
-- 至少一个不含凭据、二进制和大型日志的 commit。
+- 必要证据写入实验 README、自动测试或小型样例，不默认创建每日 devlog；
+- 用户明确要求后创建至少一个不含凭据、二进制和大型日志的 commit。
 
 ## 5. 技术路线和环境基线
 
 | 范围 | 技术 |
 |---|---|
 | E01 | C11、CMake、CTest；必要时由 Python 黑盒测试读取 JSONL |
-| E02—E04 | Python 3.10+、类型标注、`pytest`、JSONL |
+| E02—E04 | Python 3.10+、类型标注、`unittest`、JSONL |
 | E05—E06 | C++17、CMake、CTest、POSIX shared memory、原子变量 |
-| 平台探测 | PyTorch 2.4.1、CUDA 12.4、Python 3.10 |
+| 平台探测 | 已验证的 Crater 平台镜像：Python 3.12、PyTorch 2.6.0a0（NVIDIA 24.12）、CUDA 12.6、V100 |
 | NCCL 接入 | NCCL 2.21.5、Ubuntu 22.04、GCC/G++ 11、CUDA devel 镜像 |
 
-若 Crater 不提供完全一致的 PyTorch/CUDA 组合，优先选择平台维护的 Python 3.10、CUDA 12.4 邻近稳定组合；实际选择必须记录在实验报告中。最终 E06 使用原生程序直接链接 NCCL 2.21.5，不以 PyTorch 自带 NCCL 作为插桩验收依据。
+Day 03/04 优先复用已经通过 Gloo 与 CUDA 探针的 Crater 平台镜像；更换镜像时必须重新运行最小探针并在对应实验 README 中记录实际版本。最终 E06 使用原生程序直接链接 NCCL 2.21.5，不以 PyTorch 自带 NCCL 作为插桩验收依据。
 
-## 6. 目标 GitHub 仓库结构
+## 6. 仓库结构
 
-仓库名称和许可证在 Day 01 创建前由用户决定。建议结构如下：
+下列结构是阶段性导航，不要求提前创建空目录；文件只有在直接服务开发、运行、理解或验收时才加入仓库。
 
 ```text
 mycroft-nccl-reproduction/
@@ -168,13 +173,9 @@ mycroft-nccl-reproduction/
 ├── pyproject.toml
 ├── docs/
 │   ├── plans/
-│   │   ├── Mycroft_复现冻结计划.md
-│   │   └── Mycroft_逐日开发计划.md
+│   │   └── Mycroft_26日开发路线图.md
 │   ├── architecture/
-│   ├── crater/
-│   ├── reports/
-│   ├── progress/
-│   └── devlog/
+│   └── crater/
 ├── notes/
 │   └── nccl/
 ├── experiments/
@@ -256,7 +257,7 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 
 - 创建第 6 节目录骨架；
 - 提供 `.gitignore`、根 `CMakeLists.txt`、`pyproject.toml` 和测试入口；
-- 迁移冻结计划、逐日计划、`NCCL_源码学习日志.md` 和 `notes/` 下正式 Markdown；
+- 迁移当时的范围计划、逐日计划、`NCCL_源码学习日志.md` 和 `notes/` 下正式 Markdown；
 - 提供中英双语 README 骨架和 `scripts/check.sh`；
 - 不迁移旧 E01、二进制、临时文件和 `参考答案/`。
 
@@ -300,7 +301,7 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 
 **Codex 搭建**：探测接口、标准库单元测试、GUI 填写值和预期日志。
 
-**用户核心逻辑与操作**：实现 Gloo process group 和 CPU AllReduce；在页面配置 Master 1/Worker 1/GPU 0；通过 GUI 上传单个探针文件并运行。
+**核心逻辑、理解与平台操作**：实现 Gloo process group 和 CPU AllReduce；在页面配置 Master 1/Worker 1/GPU 0；通过 GUI 上传单个探针文件并运行。
 
 **验收与预期现象**：`WORLD_SIZE=2`，rank 0/1 共同完成 AllReduce；rank 0 日志输出 `result=3.0`，作业正常退出。即使平台未展示 Worker 日志，该结果也证明 rank 1 已加入通信并贡献数值 2。
 
@@ -316,7 +317,7 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 
 **Codex 搭建**：GPU 探针接口、本地假模块测试、页面配置值和输出契约。
 
-**用户核心逻辑与操作**：检查 `nvidia-smi`、PyTorch CUDA、device count、GPU tensor 运算和同步；选择一张 V100，资源不足时选择 A100。
+**核心逻辑、理解与平台操作**：检查 `nvidia-smi`、PyTorch CUDA、device count、GPU tensor 运算和同步；选择一张 V100，资源不足时选择 A100。
 
 **验收与预期现象**：Pod 只看到分配的 GPU；PyTorch tensor 运算正确；记录 GPU、driver、CUDA、PyTorch 和镜像版本；作业数分钟内完成并正常释放资源。
 
@@ -345,7 +346,7 @@ experiments/e01_ring_dependency/
 
 **Codex 搭建**：输入结构、函数声明、固定 4-rank fixture、失败测试和 CLI 骨架。
 
-**用户核心逻辑**：初始化 chunk、计算发送/接收 rank、为两条 chunk lane 实现三个 ReduceScatter step，并保存每个 step 的状态。
+**核心逻辑与理解重点**：初始化 chunk、计算发送/接收 rank、为两条 chunk lane 实现三个 ReduceScatter step，并保存每个 step 的状态。
 
 **验收与预期现象**：
 
@@ -361,7 +362,7 @@ experiments/e01_ring_dependency/
 
 **Codex 搭建**：JSONL writer 接口、schema 断言、最终结果测试和 README 命令模板。
 
-**用户核心逻辑**：实现 AllGather 转发、保存完整结果；在每个 step 发出包含 `op_seq/rank/channel/phase/step/chunk/action/peer/timestamp` 的事件。
+**核心逻辑与理解重点**：实现 AllGather 转发、保存完整结果；在每个 step 发出包含 `op_seq/rank/channel/phase/step/chunk/action/peer/timestamp` 的事件。
 
 **验收与预期现象**：
 
@@ -378,9 +379,9 @@ experiments/e01_ring_dependency/
 
 **文件扩展**：`src/delay.c`、`tests/test_delay_propagation.c`、`results/samples/e01/`。
 
-**Codex 搭建**：延迟 CLI 参数、根事件 fixture、因果图测试和验收报告模板。
+**Codex 搭建**：延迟 CLI 参数、根事件 fixture、因果图测试和 E01 README 验收小节。
 
-**用户核心逻辑**：实现直接依赖、同 rank 顺序依赖、延迟传播和根事件标记；不能给所有受影响事件直接增加人为延迟。
+**核心逻辑与理解重点**：实现直接依赖、同 rank 顺序依赖、延迟传播和根事件标记；不能给所有受影响事件直接增加人为延迟。
 
 **验收与预期现象**：
 
@@ -412,7 +413,7 @@ experiments/e02_progress_state_machine/
 
 **Codex 搭建**：三个 actor 接口、tick/scheduler 骨架、正常 fixture 和单调性断言。
 
-**用户核心逻辑**：实现 `GPU_ready >= RDMA_transmitted >= RDMA_done` 的正常推进和周期性状态记录。
+**核心逻辑与理解重点**：实现 `GPU_ready >= RDMA_transmitted >= RDMA_done` 的正常推进和周期性状态记录。
 
 **验收与预期现象**：正常轨迹最终三者相等，任何时刻均不违反单调性和先后不变量。
 
@@ -424,7 +425,7 @@ experiments/e02_progress_state_machine/
 
 **Codex 搭建**：`FaultSpec`、三类参数化测试和固定输出目录。
 
-**用户核心逻辑**：实现 GPU 未准备、Proxy 未发送、Network 未完成三类延迟/停滞，并保证故障只作用于指定执行者。
+**核心逻辑与理解重点**：实现 GPU 未准备、Proxy 未发送、Network 未完成三类延迟/停滞，并保证故障只作用于指定执行者。
 
 **验收与预期现象**：
 
@@ -439,11 +440,11 @@ experiments/e02_progress_state_machine/
 
 **实际问题**：从状态轨迹给出“知道什么、还不能断言什么”，避免把相关性当根因。
 
-**文件扩展**：`classify.py`、`tests/test_state_classification.py`、E02 报告。
+**文件扩展**：`classify.py`、`tests/test_state_classification.py`，并在 E02 README 记录验收现象。
 
 **Codex 搭建**：论文四类状态的期望表和模糊边界测试。
 
-**用户核心逻辑**：实现未开始、未发送、未送达、GPU 未继续准备的分类，并输出本地原因、远端可能原因和证据不足项。
+**核心逻辑与理解重点**：实现未开始、未发送、未送达、GPU 未继续准备的分类，并输出本地原因、远端可能原因和证据不足项。
 
 **验收与预期现象**：给定固定轨迹，分类稳定；接收端证据缺失时不能把发送端唯一判为根因。
 
@@ -466,7 +467,7 @@ tests/schema/
 
 **Codex 搭建**：`Event` 数据类、序列化接口、schema version、合法/非法 fixture 和兼容性测试。
 
-**用户核心逻辑**：确定必填字段、身份字段、operation 字段、progress 字段和依赖字段的验证规则；编写 E01/E02 adapter。
+**核心逻辑与理解重点**：确定必填字段、身份字段、operation 字段、progress 字段和依赖字段的验证规则；编写 E01/E02 adapter。
 
 **验收与预期现象**：两类实验输出均能通过同一 validator；缺 rank、op identity 或非法进度关系时给出明确错误。
 
@@ -480,7 +481,7 @@ tests/schema/
 
 **Codex 搭建**：两组 communicator、多个 operation/channel 的打乱 fixture 和期望分组。
 
-**用户核心逻辑**：定义 operation/flow key，完成乱序分组、去重、缺口报告和时间线恢复。
+**核心逻辑与理解重点**：定义 operation/flow key，完成乱序分组、去重、缺口报告和时间线恢复。
 
 **验收与预期现象**：随机打乱输入多次，恢复结果完全一致；重复事件不会重复计算；缺事件被标记而不是静默忽略。
 
@@ -504,7 +505,7 @@ third_party/nccl/              # pin 到 NCCL 2.21.5 的明确 tag/commit
 
 **Codex 搭建**：字段来源表模板和源码引用格式。
 
-**用户核心逻辑**：添加官方 NCCL 源码引用并固定到 2.21.5 的明确 tag/commit（不沿用当前未固定的 master 工作区）；逐项确认 `IP/comm_id/Gid/GPU_id/channel_id/QP_id/op_seq/msg_size` 的创建者、结构、生命周期、跨 rank 一致性和唯一性；记录三个进度量的候选位置及“已确认/待确认”。
+**核心逻辑与理解重点**：添加官方 NCCL 源码引用并固定到 2.21.5 的明确 tag/commit（不沿用当前未固定的 master 工作区）；逐项确认 `IP/comm_id/Gid/GPU_id/channel_id/QP_id/op_seq/msg_size` 的创建者、结构、生命周期、跨 rank 一致性和唯一性；记录三个进度量的候选位置及“已确认/待确认”。
 
 **验收与预期现象**：仓库记录的 tag/commit 可复查且工作区干净；每项结论都指向该版本的文件、函数、结构体成员或明确的数据流；所有猜测均标为待确认。
 
@@ -528,7 +529,7 @@ tests/analysis/test_trigger.py
 
 **Codex 搭建**：正常、停滞、吞吐下降、间隔增大 fixture 和参数接口。
 
-**用户核心逻辑**：实现完成日志缺失的停滞触发，以及默认“吞吐减半/operation 间隔翻倍”的可配置慢速触发。
+**核心逻辑与理解重点**：实现完成日志缺失的停滞触发，以及默认“吞吐减半/operation 间隔翻倍”的可配置慢速触发。
 
 **验收与预期现象**：正常短时波动不触发；固定停滞和慢速用例在预期窗口触发；输出只标记异常时间和触发类型，不提前声称根因。
 
@@ -540,7 +541,7 @@ tests/analysis/test_trigger.py
 
 **Codex 搭建**：多 rank 最后状态 fixture、并列最小值、缺失 rank 和 operation rollover 测试。
 
-**用户核心逻辑**：实现 `CheckMinOp` 和 `CheckMinData`，保留并列候选和输入证据。
+**核心逻辑与理解重点**：实现 `CheckMinOp` 和 `CheckMinData`，保留并列候选和输入证据。
 
 **验收与预期现象**：operation 落后时优先输出 MinOp；operation 一致时才比较 MinData；并列时不任意挑选唯一 rank。
 
@@ -554,7 +555,7 @@ tests/analysis/test_trigger.py
 
 **Codex 搭建**：论文状态条件、发送端/接收端对照 fixture 和结构化 `RcaResult`。
 
-**用户核心逻辑**：实现未开始、未发送、未送达、GPU 未准备规则；沿依赖边区分 root candidate 和 affected rank；输出 local/remote cause 和 evidence gap。
+**核心逻辑与理解重点**：实现未开始、未发送、未送达、GPU 未准备规则；沿依赖边区分 root candidate 和 affected rank；输出 local/remote cause 和 evidence gap。
 
 **验收与预期现象**：受阻 rank 不会被误报为唯一根因；证据不充分时输出候选集合和置信边界。
 
@@ -566,9 +567,9 @@ tests/analysis/test_trigger.py
 
 **故障集合**：GPU producer 延迟、Proxy 发送延迟、网络完成延迟、rank 整体停止、正常负载不均。
 
-**Codex 搭建**：端到端测试矩阵、expected JSON、CLI 报告模板和 L1 验收清单。
+**Codex 搭建**：端到端测试矩阵、expected JSON、CLI 输出契约和 L1 验收清单。
 
-**用户核心逻辑**：连接 Event v1、Trigger、MinOp/MinData 和 RCA；生成文本/JSON 报告与依赖时间线。
+**核心逻辑与理解重点**：连接 Event v1、Trigger、MinOp/MinData 和 RCA；生成文本/JSON 报告与依赖时间线。
 
 **验收与预期现象**：
 
@@ -600,7 +601,7 @@ runtime/
 
 **Codex 搭建**：ABI 结构、静态尺寸断言、create/open/close/unlink 接口和失败测试。
 
-**用户核心逻辑**：实现共享内存创建、映射、只读/读写打开、清理和版本校验。
+**核心逻辑与理解重点**：实现共享内存创建、映射、只读/读写打开、清理和版本校验。
 
 **验收与预期现象**：两个独立进程能映射同一段内存；版本或容量不匹配时拒绝读取；异常退出后有明确清理办法。
 
@@ -616,7 +617,7 @@ runtime/
 
 **Codex 搭建**：接口、容量 4 的确定性测试、慢 reader 和 wrap-around fixture。
 
-**用户核心逻辑**：实现 reserve/publish/read、序号判断、覆盖策略和 dropped counter。
+**核心逻辑与理解重点**：实现 reserve/publish/read、序号判断、覆盖策略和 dropped counter。
 
 **验收与预期现象**：writer 不等待；wrap-around 后 reader 只读到有效完整记录；覆盖数量与 dropped counter 一致；ThreadSanitizer 在环境允许时无数据竞争。
 
@@ -626,11 +627,11 @@ runtime/
 
 **实际问题**：把二进制事件稳定转换成 E04 能消费的 Event v1。
 
-**文件框架**：`runtime/tools/trace_reader.cpp`、`runtime/tests/test_reader_e2e.cpp`、E05 报告。
+**文件框架**：`runtime/tools/trace_reader.cpp`、`runtime/tests/test_reader_e2e.cpp`，压力结果记录在 E05 README。
 
 **Codex 搭建**：reader CLI、writer workload、慢 reader 参数、E04 validator 接口和压力脚本。
 
-**用户核心逻辑**：实现批量读取、二进制到 JSONL 转换、丢事件标记、优雅停止和 rank 文件命名。
+**核心逻辑与理解重点**：实现批量读取、二进制到 JSONL 转换、丢事件标记、优雅停止和 rank 文件命名。
 
 **验收与预期现象**：高频 writer 不被 reader 阻塞；正常负载零丢失；故意溢出时丢失可观测；导出文件通过 Event v1 validator 和 E04 parser。
 
@@ -642,11 +643,11 @@ runtime/
 
 **最小补充知识**：一进程一 Pod、rank/world size、NCCL bootstrap 与 data transport、Socket 路径。
 
-**文件框架**：`cluster/crater/probes/ddp_smoke.py`、`run_ddp_socket.sh`、C03 报告。
+**文件框架**：`cluster/crater/probes/ddp_smoke.py`、`run_ddp_socket.sh`，Socket 证据记录在 Crater 实验 README。
 
 **Codex 搭建**：DDP 接口、正确性测试、页面配置表和 NCCL 日志检查项。
 
-**用户核心逻辑与操作**：实现 NCCL process group 和 GPU AllReduce；Master/Worker 各 1 GPU；Allow List 选择两台同型号节点；设置诊断用 `NCCL_IB_DISABLE=1` 和 `NCCL_DEBUG=INFO`。
+**核心逻辑、理解与平台操作**：实现 NCCL process group 和 GPU AllReduce；Master/Worker 各 1 GPU；Allow List 选择两台同型号节点；设置诊断用 `NCCL_IB_DISABLE=1` 和 `NCCL_DEBUG=INFO`。
 
 **验收与预期现象**：作业详情确认两个 Pod 位于不同物理节点；AllReduce 正确；日志出现 `NET/Socket`；若落到同一节点则本日不通过并重新调度。
 
@@ -658,11 +659,11 @@ runtime/
 
 **最小补充知识**：InfiniBand、RDMA、HCA、CQE、GPU Direct 的最小角色；`ibstat`、`ibv_devices`、`ulimit -l` 分别说明什么。
 
-**文件框架**：`run_ddp_rdma.sh`、`docs/crater/RDMA检查清单.md`、C04 报告。
+**文件框架**：`run_ddp_rdma.sh`、`docs/crater/RDMA检查清单.md`，RDMA 证据记录在 Crater 实验 README。
 
-**Codex 搭建**：RDMA 页面填写表、命令检查清单和 Socket/RDMA 对照报告模板。
+**Codex 搭建**：RDMA 页面填写表、命令检查清单和 README 中的 Socket/RDMA 对照表。
 
-**用户核心逻辑与操作**：为所有角色启用一致 RDMA 配置；确认 IB 设备和 memlock；移除 Socket 强制开关；设置 `NCCL_DEBUG=INFO` 与 `NCCL_DEBUG_SUBSYS=INIT,NET`。
+**核心逻辑、理解与平台操作**：为所有角色启用一致 RDMA 配置；确认 IB 设备和 memlock；移除 Socket 强制开关；设置 `NCCL_DEBUG=INFO` 与 `NCCL_DEBUG_SUBSYS=INIT,NET`。
 
 **验收与预期现象**：两个物理节点、同型号 GPU、AllReduce 正确；日志明确出现 `NET/IB` 而非回退 `NET/Socket`；无法获取 RDMA 时标为环境阻塞，不伪造通过。
 
@@ -685,7 +686,7 @@ instrumentation/nccl-2.21.5/README.md
 
 **Codex 搭建**：Dockerfile/build script 骨架、版本检查和 smoke link test。
 
-**用户核心逻辑与操作**：选择 CUDA devel 基础镜像；安装编译/IB 工具；固定 NCCL 2.21.5；完成未插桩版本编译；记录实际版本矩阵。
+**核心逻辑、理解与平台操作**：选择 CUDA devel 基础镜像；安装编译/IB 工具；固定 NCCL 2.21.5；完成未插桩版本编译；记录实际版本矩阵。
 
 **验收与预期现象**：`nvcc`、G++、CMake 可用；NCCL 2.21.5 编译成功；最小链接测试运行；构建过程不依赖交互式手工修补。
 
@@ -708,7 +709,7 @@ workloads/minimal_allreduce/
 
 **Codex 搭建**：CLI、socket/bootstrap 接口、错误处理框架、单进程单元测试和 Crater 启动脚本。
 
-**用户核心逻辑**：rank 0 获取 `ncclUniqueId`，通过最小 TCP bootstrap 分发；各 rank 设置 GPU、初始化 communicator、执行 AllReduce、同步并验证结果。
+**核心逻辑与理解重点**：rank 0 获取 `ncclUniqueId`，通过最小 TCP bootstrap 分发；各 rank 设置 GPU、初始化 communicator、执行 AllReduce、同步并验证结果。
 
 **验收与预期现象**：两个 Crater Pod 上各一个原生进程；结果正确；动态链接检查明确指向项目构建的 NCCL 2.21.5；不依赖 MPI 或 PyTorch NCCL。
 
@@ -720,7 +721,7 @@ workloads/minimal_allreduce/
 
 **Codex 搭建**：NCCL 内部 tracing API 接口、构建开关、patch 生成脚本和真实轨迹集成测试骨架。
 
-**用户核心逻辑**：依据 Day 13 映射确认最终插桩位置；初始化共享内存；写 completion/state log；更新 operation identity 和三个进度量；在同 Pod 启动 reader。
+**核心逻辑与理解重点**：依据 Day 13 映射确认最终插桩位置；初始化共享内存；写 completion/state log；更新 operation identity 和三个进度量；在同 Pod 启动 reader。
 
 **验收与预期现象**：
 
@@ -736,9 +737,9 @@ workloads/minimal_allreduce/
 
 **实际问题**：证明真实 NCCL 事件能支持检测和定位，而不是只完成日志采集。
 
-**Codex 搭建**：基线/插桩/延迟三组运行矩阵、结果报告模板和端到端断言。
+**Codex 搭建**：基线/插桩/延迟三组运行矩阵、L2 README 证据小节和端到端断言。
 
-**用户核心逻辑与操作**：加入可控、默认关闭的软件延迟；运行正常与异常 workload；收集 rank JSONL；运行 E04；比较正确性、运行时间、事件数和 dropped counter。
+**核心逻辑、理解与平台操作**：加入可控、默认关闭的软件延迟；运行正常与异常 workload；收集 rank JSONL；运行 E04；比较正确性、运行时间、事件数和 dropped counter。
 
 **验收与预期现象**：
 
@@ -771,14 +772,16 @@ workloads/minimal_allreduce/
 
 ### 11.1 Day 01—Day 17
 
-- 每天至少一个通过测试的 commit 直接提交 `main`；
+- 每个验收通过的开发日至少形成一个通过测试的 commit，Day 01—Day 17 直接提交 `main`；
 - commit 前运行统一检查脚本；
 - 不提交失败测试、WIP、二进制或大型输出；
+- commit 和 push 必须由用户明确发出指令；push 默认由用户执行；
+- commit 前核对暂存边界，不把下一 Day 的工作混入当前提交；
 - 推荐格式：`type(scope): subject`。
 
 ### 11.2 Day 18—Day 26
 
-- E05、Crater 集成和 E06 使用短分支；
+- E05/E06 修改底层运行时和 NCCL 代码时使用短分支；Crater 配置或探针是否单独建分支由任务风险决定；
 - 分支只覆盖一个阶段或明确子任务；
 - 用户完成自验后创建 PR；
 - PR 描述包含目的、测试、预期现象、实际现象和风险；
@@ -811,27 +814,11 @@ workloads/minimal_allreduce/
 5. 不把本机模拟成功写成 L2 完成；
 6. 等待用户或管理员处理后继续同一任务。
 
-任何范围、验收或顺序变化都必须按冻结计划提交变更记录，得到用户确认后执行。
+任何范围、验收或顺序变化都必须在本路线图中留下简短变更记录，并在得到用户确认后执行；稳定协作规则的变化更新 `AGENTS.md`。
 
-## 13. Day 01 允许迁移的现有文件
+## 13. Day 01 历史迁移边界
 
-计划确认后，只迁移以下正式 Markdown：
-
-- `Mycroft_复现冻结计划.md`；
-- `Mycroft_逐日开发计划.md`；
-- `NCCL_源码学习日志.md`；
-- `notes/阶段01_Communicator与AllReduce任务提交.md`；
-- `notes/阶段01_综合测验_从应用调用到GPU网络执行.md`；
-- `notes/阶段02_从Host任务到GPU_Ring_AllReduce执行.md`。
-- `notes/NCCL_专有名词_英文简称与常见函数速查.md`。
-
-不迁移：
-
-- `参考答案/`；
-- `experiments/e01_ring_dependency/` 中的旧 C 程序和二进制；
-- `notes/lab1`、`notes/lab1.cpp`、`notes/learn`；
-- 当前 master 版 `nccl/` 工作树；
-- 本机绝对路径、截图、临时日志和构建产物。
+Day 01 只迁移了正式 Markdown，并排除了旧 E01、参考答案、临时笔记、嵌套 NCCL 工作树、本机绝对路径和构建产物。本节仅保留这一历史决策；后续文件是否加入仓库由 `AGENTS.md` 的最小必要原则和公开安全规则判断。
 
 ## 14. 依据
 
@@ -844,7 +831,7 @@ workloads/minimal_allreduce/
 - [Crater RDMA 说明](https://raids-lab.github.io/crater/zh/docs/admin/more/rdma/)
 - [Volcano PyTorch 插件说明](https://volcano.sh/docs/userguide/user_guide_how_to_use_pytorch_plugin/)
 
-## 15. v0.2 变更记录与当前执行边界
+## 15. 计划变更记录
 
 用户已确认原 v0.1 计划并启动 Day 01。随后用户提出先熟悉开发与运行工具，再进入 E01 知识和核心实现；本次 v0.2 调整已经用户明确确认。
 
@@ -856,4 +843,9 @@ v0.2 只改变顺序，不改变 E01—E06 的范围、总开发日数量或最�
 - E06 保持在 Day 23—26；
 - Day 01—17 直接提交 `main`，Day 18 起对 E05/E06 底层代码使用分支和 PR。
 
-当前只允许继续完成 Day 01 的文档审查、本地验收、首次 commit 和公开发布。只有用户明确说“Day 01 验收通过，进入 Day 02”后，才开始创建 Crater 教学材料或提交平台作业。
+
+v0.3 在不改变 E01—E06、26 个开发日和 L2 验收目标的前提下：
+
+- 建立 `AGENTS.md` 作为稳定规则入口；
+- 从工作树删除早期 L1/学习路线文档，由 Git 历史保留原始内容，并将本文确立为当前执行路线；
+- 统一结对分工、最小文档、Git 授权、实际 Crater 环境和动态状态规则。
