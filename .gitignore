@@ -38,6 +38,10 @@ Thumbs.db
 results/**
 !results/samples/
 !results/samples/.gitkeep
+!results/samples/e01/
+!results/samples/e01/README.md
+!results/samples/e01/normal.jsonl
+!results/samples/e01/rank1-delay.jsonl
 
 # Third-party source is added deliberately at the planned milestone.
 /third_party/nccl/

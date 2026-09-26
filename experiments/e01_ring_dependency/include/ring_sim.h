@@ -20,6 +20,7 @@ typedef enum {
     RING_OK = 0,
     RING_ERROR_INVALID_ARGUMENT = -1,
     RING_ERROR_NOT_IMPLEMENTED = -2,
+    RING_ERROR_EVENT_NOT_FOUND = -3,
 } RingStatus;
 
 typedef struct {

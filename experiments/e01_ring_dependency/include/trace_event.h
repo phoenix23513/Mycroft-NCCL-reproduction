@@ -13,6 +13,12 @@ typedef enum {
     TRACE_ACTION_RECV = 1,
 } TraceAction;
 
+typedef enum {
+    TRACE_DELAY_NONE = 0,
+    TRACE_DELAY_INJECTED_ROOT = 1,
+    TRACE_DELAY_AFFECTED = 2,
+} TraceDelayRole;
+
 /* One deterministic simulator event. */
 typedef struct {
     uint64_t op_seq;
@@ -23,7 +29,9 @@ typedef struct {
     int chunk_id;
     TraceAction action;
     int peer;
+    uint64_t baseline_timestamp;
     uint64_t timestamp;
+    TraceDelayRole delay_role;
     int value;
     uint32_t contributor_mask;
 } TraceEvent;

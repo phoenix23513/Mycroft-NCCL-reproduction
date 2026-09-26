@@ -26,7 +26,9 @@ static RingStatus record_event(
     event->chunk_id = chunk;
     event->action = action;
     event->peer = peer;
+    event->baseline_timestamp = sim->next_timestamp;
     event->timestamp = sim->next_timestamp;
+    event->delay_role = TRACE_DELAY_NONE;
     event->value = state.value;
     event->contributor_mask = state.contributor_mask;
 

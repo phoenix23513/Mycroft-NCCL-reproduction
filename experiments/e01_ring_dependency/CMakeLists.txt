@@ -2,7 +2,7 @@ option(MYCROFT_ENABLE_ASAN "Enable AddressSanitizer for supported C targets" OFF
 
 add_library(
   e01_ring_sim_lib STATIC
-  src/ring_sim.c src/trace_jsonl.c
+  src/delay.c src/ring_sim.c src/trace_jsonl.c
 )
 target_include_directories(e01_ring_sim_lib PUBLIC include)
 target_compile_options(e01_ring_sim_lib PRIVATE -Wall -Wextra -Wpedantic)
@@ -31,8 +31,19 @@ target_compile_options(
     -Wpedantic
 )
 
+add_executable(test_e01_delay_propagation tests/test_delay_propagation.c)
+target_link_libraries(test_e01_delay_propagation PRIVATE e01_ring_sim_lib)
+target_compile_options(
+  test_e01_delay_propagation
+  PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
 add_test(NAME e01_reduce_scatter COMMAND test_e01_reduce_scatter)
 add_test(NAME e01_all_gather COMMAND test_e01_all_gather)
+add_test(NAME e01_delay_propagation COMMAND test_e01_delay_propagation)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(
@@ -46,7 +57,13 @@ add_test(
 if(MYCROFT_ENABLE_ASAN AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(e01_ring_sim_lib PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 
-  foreach(target e01_ring_sim test_e01_reduce_scatter test_e01_all_gather)
+  foreach(
+    target
+    e01_ring_sim
+    test_e01_reduce_scatter
+    test_e01_all_gather
+    test_e01_delay_propagation
+  )
     target_compile_options(${target} PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(${target} PRIVATE -fsanitize=address)
   endforeach()

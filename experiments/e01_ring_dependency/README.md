@@ -139,3 +139,38 @@ ctest --test-dir .build -R 'e01_all_gather|e01_trace_jsonl' --output-on-failure
 - 四个 rank 最终拥有相同的8个完整结果，mask 均为 `0x0f`；
 - 96 条 JSONL 事件可独立解析，缺失或交换必要事件会被拒绝；
 - 普通测试、全仓库回归、AddressSanitizer 和浏览器动画验收通过。
+
+## Day 07 任务：单点延迟与因果传播
+
+Day 07 不改变 Ring 数值计算，只在已经生成的 96 条事件上建立因果关系。框架文件是 include/delay.h、src/delay.c 和 tests/test_delay_propagation.c。
+
+你需要完成三个接口：
+
+1. delay_find_message_predecessor：为 recv 找到同一次传输的 send；
+2. delay_find_rank_predecessor：找到同一 rank 上离当前事件最近的前一个事件；
+3. ring_apply_causal_delay：只给根事件主动增加延迟，再让延迟沿上述依赖传播。
+
+固定根事件是 ReduceScatter 的 step=0, rank=1, chunk=0, send，主动延迟 100 个逻辑时间单位。只有它应标记为 injected_root；后继事件只能标记为 affected，不能再次主动加 100。
+
+先观察预期失败：
+
+~~~bash
+cmake -S . -B .build
+cmake --build .build --target test_e01_delay_propagation e01_ring_sim
+ctest --test-dir .build -R e01_delay_propagation --output-on-failure
+~~~
+
+实现后观察 JSONL：
+
+~~~bash
+./.build/experiments/e01_ring_dependency/e01_ring_sim \
+  --jsonl \
+  --inject-delay reduce_scatter 0 1 0 send 100
+~~~
+
+验收时必须同时满足：
+
+- 恰好一个 injected_root；
+- 至少一个下游 rank 出现 affected；
+- 未受影响事件保持基线时间；
+- AllReduce 数值与 contributor mask 完全不变。

@@ -22,6 +22,18 @@ static const char *action_name(TraceAction action) {
     return NULL;
 }
 
+static const char *delay_role_name(TraceDelayRole role) {
+    switch (role) {
+        case TRACE_DELAY_NONE:
+            return "none";
+        case TRACE_DELAY_INJECTED_ROOT:
+            return "injected_root";
+        case TRACE_DELAY_AFFECTED:
+            return "affected";
+    }
+    return NULL;
+}
+
 int trace_event_write_jsonl(FILE *stream, const TraceEvent *event) {
     if (stream == NULL || event == NULL) {
         return -1;
@@ -29,7 +41,8 @@ int trace_event_write_jsonl(FILE *stream, const TraceEvent *event) {
 
     const char *phase = phase_name(event->phase);
     const char *action = action_name(event->action);
-    if (phase == NULL || action == NULL) {
+    const char *delay_role = delay_role_name(event->delay_role);
+    if (phase == NULL || action == NULL || delay_role == NULL) {
         return -1;
     }
 
@@ -37,7 +50,9 @@ int trace_event_write_jsonl(FILE *stream, const TraceEvent *event) {
         stream,
         "{\"op_seq\":%" PRIu64 ",\"rank\":%d,\"channel\":%d,"
         "\"phase\":\"%s\",\"step\":%d,\"chunk\":%d,"
-        "\"action\":\"%s\",\"peer\":%d,\"timestamp\":%" PRIu64 ","
+        "\"action\":\"%s\",\"peer\":%d,"
+        "\"baseline_timestamp\":%" PRIu64 ","
+        "\"timestamp\":%" PRIu64 ",\"delay_role\":\"%s\","
         "\"value\":%d,\"contributor_mask\":%" PRIu32 "}\n",
         event->op_seq,
         event->rank,
@@ -47,7 +62,9 @@ int trace_event_write_jsonl(FILE *stream, const TraceEvent *event) {
         event->chunk_id,
         action,
         event->peer,
+        event->baseline_timestamp,
         event->timestamp,
+        delay_role,
         event->value,
         event->contributor_mask
     );
