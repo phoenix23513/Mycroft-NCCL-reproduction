@@ -26,4 +26,9 @@ else
   "$build_dir/mycroft_cpp_smoke"
 fi
 
+echo "[check] E02 progress state machine"
+python3 -m unittest discover \
+  -s "$project_root/experiments/e02_progress_state_machine/tests" \
+  -p "test_*.py"
+
 echo "[check] All repository checks passed"
