@@ -42,6 +42,8 @@ results/**
 !results/samples/e01/README.md
 !results/samples/e01/normal.jsonl
 !results/samples/e01/rank1-delay.jsonl
+!results/samples/e02/
+!results/samples/e02/faults.txt
 
 # Third-party source is added deliberately at the planned milestone.
 /third_party/nccl/

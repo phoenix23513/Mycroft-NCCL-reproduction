@@ -1,0 +1,46 @@
+fault_target: gpu_producer
+
+tick  gpu_ready  rdma_transmitted  rdma_done
+0     0          0                 0
+1     1          0                 0
+2     1          1                 0
+3     1          1                 1
+4     1          1                 1
+5     2          1                 1
+6     3          2                 1
+7     4          3                 2
+8     5          4                 3
+9     6          5                 4
+10    6          6                 5
+11    6          6                 6
+
+fault_target: proxy_transmitter
+
+tick  gpu_ready  rdma_transmitted  rdma_done
+0     0          0                 0
+1     1          0                 0
+2     2          0                 0
+3     3          0                 0
+4     4          0                 0
+5     5          1                 0
+6     6          2                 1
+7     6          3                 2
+8     6          4                 3
+9     6          5                 4
+10    6          6                 5
+11    6          6                 6
+
+fault_target: network_completer
+
+tick  gpu_ready  rdma_transmitted  rdma_done
+0     0          0                 0
+1     1          0                 0
+2     2          1                 0
+3     3          2                 0
+4     4          3                 0
+5     5          4                 1
+6     6          5                 2
+7     6          6                 3
+8     6          6                 4
+9     6          6                 5
+10    6          6                 6
