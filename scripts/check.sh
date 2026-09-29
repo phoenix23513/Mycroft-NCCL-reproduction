@@ -8,6 +8,11 @@ echo "[check] Python smoke test"
 PYTHONPATH="$project_root/src${PYTHONPATH:+:$PYTHONPATH}" \
   python3 -m unittest discover -s "$project_root/tests/python" -p "test_*.py"
 
+echo "[check] Event v1 schema"
+PYTHONPATH="$project_root/src${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 -m unittest discover -s "$project_root/tests/schema" \
+  -p "test_*.py"
+
 echo "[check] C++ smoke build"
 if command -v cmake >/dev/null 2>&1; then
   cmake -S "$project_root" -B "$build_dir"
