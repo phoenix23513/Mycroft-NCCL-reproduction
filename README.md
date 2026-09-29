@@ -9,7 +9,7 @@
 ## 当前进度
 
 - **E01 已完成**：4-rank、8-chunk Ring ReduceScatter/AllGather、JSONL 事件、单点延迟注入和因果传播。
-- **E02 开发中**：正在实现 GPU producer、CPU Proxy 和 Network completer 的三阶段通信进度状态机。
+- **E02 已完成**：GPU、Proxy 和 Network 三阶段正常推进、三层临时停滞以及论文四类快照状态分类均已通过验收。
 - Crater 上已经完成 CPU/Gloo 双进程 AllReduce 与单 GPU PyTorch/CUDA 环境验证。
 
 详细任务与每日进度见 [`docs/plans/Mycroft_26日开发路线图.md`](docs/plans/Mycroft_26日开发路线图.md)。
@@ -88,7 +88,7 @@ ctest --test-dir .build --output-on-failure
 
 This repository independently reproduces the core path of Mycroft-style NCCL stall diagnosis: communication modeling, progress-state tracing, causal analysis, a shared-memory event channel, and finally NCCL 2.21.5 instrumentation.
 
-E01 is complete and provides a deterministic Ring AllReduce simulator, JSONL traces, and causal delay propagation. E02, a three-stage GPU/Proxy/Network progress-state model, is currently under development. See the [26-day development roadmap](docs/plans/Mycroft_26日开发路线图.md) for the current plan.
+E01 provides a deterministic Ring AllReduce simulator, JSONL traces, and causal delay propagation. E02 is complete with normal three-stage progress, component-specific temporary stalls, and bounded snapshot-state classification. See the [26-day development roadmap](docs/plans/Mycroft_26日开发路线图.md) for the current plan.
 
 ## License
 

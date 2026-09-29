@@ -76,3 +76,30 @@ python3 experiments/e02_progress_state_machine/cli.py \
 ~~~
 
 该命令使用同一组可配置参数，以人工可读的分组表格依次展示三种 fault target。相同输出保存在 `results/samples/e02/faults.txt`。自动测试和全量检查由开发过程执行，不作为多项人工验收步骤。
+
+## Day 10 状态分类框架
+
+Day 10 不再制造新的故障，而是按照论文中的三个累计量关系解释单个进度快照。`classify_snapshot(snapshot, total_chunks)` 输出的是“数据目前处于什么状态”，不是“哪个 actor 已经发生故障”。
+
+| 状态 | 快照条件 | 本地可能原因 | 远端可能原因 |
+|---|---|---|---|
+| `not_started` | `gpu_ready == rdma_transmitted == rdma_done == 0` | 未初始化 | 被依赖阻塞 |
+| `not_transmitted` | `gpu_ready > rdma_transmitted` | RDMA 发送问题 | 接收端未就绪 |
+| `not_delivered` | `rdma_transmitted > rdma_done` | RDMA 完成问题 | 接收端故障 |
+| `gpu_not_ready` | `0 < gpu_ready == rdma_transmitted == rdma_done < total_chunks` | GPU 或软件层未继续准备 | 无直接远端结论 |
+
+多个条件可以同时成立。例如 `(6, 4, 1)` 同时具有 `not_transmitted` 和 `not_delivered` 状态，但这不能证明 Proxy 和 Network 同时故障。正常流水线中的 `(3, 2, 1)` 也具有这两个状态，因为分阶段流水线本来就会存在尚未发送和尚未完成的数据。
+
+Day 09 的 `FaultSpec.target` 是模拟器生成轨迹时使用的已知实验真值，不是论文状态分类器的输入。判断某个 actor 是否在相邻 tick 中停止推进属于测试模型或后续时间分析；不能改写上述四种快照状态的含义。
+
+分类结果只列本地可能原因、远端可能原因和仍缺失的证据。E02 没有消息方向和对端事件身份，不能用另一个普通发送快照冒充接收端证据，也不能输出唯一根因；这些能力留给 E03/E04。
+
+`classify_snapshot()` 已实现上述四类状态、输入验证和证据边界。定向运行：
+
+~~~bash
+python3 -m unittest discover \
+  -s experiments/e02_progress_state_machine/tests \
+  -p 'test_state_classification.py' -v
+~~~
+
+预期论文状态表、重叠条件、完成态、正常流水线状态和非法输入测试全部通过；Day 08/09 的既有测试也应继续通过。
