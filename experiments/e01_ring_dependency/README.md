@@ -4,6 +4,17 @@ Day 05 实现 ReduceScatter；Day 06 在同一个 4-rank、8-chunk、单 channel
 
 交互式过程可直接用浏览器打开 `visualizer.html`。它用移动的 chunk 方块完整展示 ReduceScatter 与 AllGather，仍是固定模拟的离线教学视图，不代表真实 NCCL/GPU 时间线。
 
+## 与论文和真实 NCCL 的边界
+
+E01 是用于验证 Ring 数据流和依赖传播规则的确定性测试模型，不是 Mycroft 论文运行时或真实 NCCL 调度器的等价实现：
+
+- 模型固定为 4 个 rank、8 个 chunk、单 channel 和同步 step；真实 NCCL 可能使用多个 channel、不同协议分片和异步执行；
+- `baseline_timestamp` 首先表示事件记录顺序，不是物理开始或完成时间，因此不能直接用不同 rank 的绝对时间比较真实快慢；
+- Day 07 把同一 rank 的相邻事件全部串成顺序依赖，这是便于观察传播的保守简化，可能跨越不同 chunk/lane，不能外推为真实 NCCL 的精确因果图；
+- 延迟实验能证明一个主动注入事件如何在本模型定义的依赖图中产生 `affected` 后继，但不单独证明真实环境中的最慢 rank、硬件故障位置或性能开销。
+
+这些限制不影响 E01 对固定 Ring 调度、规约结果、消息配对和模型内依赖传播的验证。真实事件身份、时间窗口、组件进度和根因分析分别留给 E02—E06。
+
 ## 固定输入与结果
 
 ```text
