@@ -1,6 +1,6 @@
 # NCCL 2.21.5 Instrumentation
 
-Day 13 使用官方 NCCL submodule 做源码映射；Day 23—26 才添加可复查的插桩 patch。
+Day 13 使用官方 NCCL submodule 做源码映射；新路线从 Day 14 构建该版本，Day 16 起添加并验证可复查的插桩 patch。
 
 固定基线：
 
@@ -22,7 +22,7 @@ git -C third_party/nccl rev-parse HEAD
 
 文档入口：
 
-- [`tracepoints.md`](tracepoints.md)：候选插桩点、能观察的状态和 E06 动态验证清单；
+- [`tracepoints.md`](tracepoints.md)：候选插桩点、能观察的状态和 Day 16—20 动态验证清单；
 - [`../../docs/architecture/event-field-sources.md`](../../docs/architecture/event-field-sources.md)：论文字段、版本化 Event 与 NCCL 成员之间的映射及限制。
 
-Day 13 不包含 NCCL 修改或编译结果；候选点只有经过 E06 实机验证后才能升级为已确认插桩语义。
+Day 13 不包含 NCCL 修改或编译结果；候选点只有经过 Day 16—20 的真实 NCCL 运行验证后才能升级为已确认插桩语义。

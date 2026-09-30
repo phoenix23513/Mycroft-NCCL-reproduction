@@ -1,6 +1,6 @@
 # NCCL 2.21.5 候选插桩点
 
-本文只设计 E06 的候选位置，不在 Day 13 修改 NCCL。每个位置都基于 submodule 固定的 `v2.21.5-1` 源码。
+本文记录 Day 13 得到的候选位置，不在 Day 13 修改 NCCL；Day 16—20 将按真实运行结果逐项验证和更新。每个位置都基于 submodule 固定的 `v2.21.5-1` 源码。
 
 ## 候选点总览
 
@@ -80,13 +80,13 @@ lid or gid (according to link_layer)
 Event v2 为后续分析规定输入契约，但没有把候选点伪装成已完成插桩：
 
 - 进度事件应在 T4 使用采集进程的同一单调时钟，写入 `NCCL_MONOTONIC_NS`；
-- operation completion 只能在该 operation 的所有 channel/sub 都完成后生成，`event.time.value` 是完成时间；确切聚合位置仍须 E06 动态确认；
+- 论文的 completion log 表示 CollOp 完成；所有 channel/sub 完成只是当前候选必要条件，是否足以代表 CollOp 完成必须在 Day 16 动态确认。确认前不得生成 `OPERATION_COMPLETION`，`event.time.value` 的真实观测点也不得预设；
 - `started_at_ns` 必须与完成时间来自同一进程、同一时钟域；
 - `message_bytes` 使用 operation 级 `ncclInfo.nBytes`，不能用单个 Proxy slice 的 `nbytes` 冒充；
 - completion 是 operation 级记录，所以 `channel=null`；channel 级 progress 仍保留实际 channel；
 - 不同 rank/主机的原始 monotonic 纳秒值不可直接比较，只能先在各 rank 内计算 duration、throughput 或 interval。
 
-## E06 前必须完成的动态验证
+## Day 16—20 必须完成的动态验证
 
 1. 两个 rank 连续运行至少三个 AllReduce，确认相同 CollOp 的 `(commHash, opCount >> 1)` 跨 rank 对齐；
 2. 至少一次多 channel 运行，确认同一 CollOp 的所有 channel 共享 `op_seq` 而 `channelId` 不同；

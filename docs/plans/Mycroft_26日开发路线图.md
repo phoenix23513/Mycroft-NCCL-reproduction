@@ -1,19 +1,21 @@
 # Mycroft 26 日开发路线图
 
-- 版本：v0.3（统一规则、计划职责与当前执行状态）
+- 版本：v0.4（Day 14 起真实 NCCL 优先）
 - 当前规则：仓库根目录 `AGENTS.md`
-- 历史版本：v0.1/v0.2 的完整内容保留在 Git 历史中，关键变更见第 15 节
+- 历史版本：v0.1/v0.2/v0.3 的完整内容保留在 Git 历史中，关键变更见第 15 节
 - NCCL 目标版本：2.21.5
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：进入 Day 14 前的契约纠错已完成实现：Event v1 保持可读，Event v2 补充进程本地单调时间和 operation completion；尚未开始 Day 14 Trigger
+- 当前状态：Day 13 与 Event v2 契约纠错已完成；v0.4 已将真实 NCCL 构建前移，下一步是 Day 14 构建与加载基线，尚未执行任何 Day 14 实验
 
 ## 1. 计划要解决的问题
 
 本项目把 Mycroft 复现作为开发主线，不再把“先系统学完 NCCL”作为启动条件。每个阶段都从一个可运行功能出发；只有实现遇到实际缺口时，才补充解决该缺口所需的 NCCL、C/C++、Python、Docker、PyTorch、Kubernetes 或 RDMA 知识。
 
 每天只完成一个有明确边界的子任务，并在验收通过后形成至少一个可运行 commit。解释过、阅读过或通过自测均不等于完成；只有代码、自动测试、固定演示和运行证据一致时，子任务才算通过。
+
+从 Day 14 起改变执行原则：先构建、运行和插桩真实 NCCL 2.21.5，再实现消费这些真实轨迹的分析器。E01、E02 和手写 Event 仍可作为确定性单元回归，但不能再单独充当任何实验日、L1 或 L2 的验收证据。
 
 本文是当前唯一的开发路线与动态进度文档：第 2 节定义 E01—E06 范围，其余章节把范围展开为每日任务。稳定的协作、Git、文档和安全规则统一由 `AGENTS.md` 管理；历史计划不再约束当前执行。
 
@@ -37,31 +39,25 @@
 4. **E04：Mycroft 分析器 MVP**
    - 停滞触发、慢速触发、`MinOp`、`MinData`；
    - 根因候选、受影响 rank、证据链和置信边界；
-   - 固定故障用例和自动测试。
+   - 真实 NCCL 正常/延迟轨迹的集成验收，以及仅用于边界回归的固定 fixture。
 5. **E05：共享内存循环缓冲区与独立 reader**
    - 固定事件 ABI；
    - 写入方不等待 reader；
    - 覆盖、丢事件和版本错误均可观察；
-   - reader 输出可直接交给 E04。
+   - reader 将真实 NCCL 事件输出为可直接交给 E04 的 Event v2。
 6. **Crater 平台上手和多机基线**
    - 理解普通用户需要操作的页面与对象；
    - CPU 双 Pod、单 GPU、双节点 Socket、双节点 RDMA 逐层验证。
 7. **E06：接入 NCCL 2.21.5**
-   - 编译修改版 NCCL；
-   - 原生最小双 rank AllReduce 直接加载修改版 `libnccl.so`；
+   - Day 14 编译未插桩基线，Day 16 起持续运行可复查的修改版 NCCL；
+   - 原生最小双 rank AllReduce 直接加载项目构建的 `libnccl.so`，并在插桩后重复验证；
    - 真实事件进入 E05 并由 E04 分析；
    - 至少一个确定性软件延迟用例能被检测和定位；
    - 记录正确性、开销和丢事件结果。
 
-### 2.2 明确不做
+### 2.2 范围边界
 
-- 不复刻论文的 Kafka、云数据库和生产 Web 后端；
-- 不复刻 32 张 A100 或更大规模的全部论文实验；
-- 不把 Tree、CollNet、NVLS、LL、LL128 的完整实现纳入主线；
-- 不系统学习 Kubernetes 管理、Crater 部署或 RDMA verbs；
-- 不承诺硬件破坏性故障注入、网卡限速、PCIe 降级或 GPU 限功率；
-- 不把当前 `参考答案/` 作为设计、实现或测试输入；
-- 不迁移旧学习目录中的 E01 C 草稿；本仓库 `experiments/e01_ring_dependency/` 是从零建立并验收的新实现。
+本项目聚焦 Mycroft 的 NCCL 观测、异常检测和根因分析关键路径，不扩展为生产监控平台或论文全部大规模实验的复刻。具体任务只有在存在技术歧义、安全风险或验收混淆时才说明排除项。
 
 ### 2.3 完成状态
 
@@ -72,7 +68,7 @@
 | 已验证 | 自动测试、固定演示、运行证据和用户解释全部通过 |
 | 环境阻塞 | 可做部分已完成，但被集群、GPU、网络、权限或镜像条件阻塞 |
 
-L1 只有在 Day 17 通过后完成。L2 只有在 Day 26 的 Crater 多机真实验证通过后完成；仅完成代码或仅能编译时必须标为“L2 实现完成，集群验证未完成”。
+L1 只有在 Day 23 的真实 NCCL 单机双 rank 端到端验收通过后完成。L2 只有在 Day 26 的 Crater 多机真实验证通过后完成；仅完成代码或仅能编译时必须标为“L2 实现完成，集群验证未完成”。
 
 ## 3. 任务执行方式
 
@@ -83,7 +79,8 @@ L1 只有在 Day 17 通过后完成。L2 只有在 Day 26 的 Crater 多机真�
 Codex 先提供当天任务卡，并在用户确认任务边界后才修改骨架文件。任务卡必须包含：
 
 - 当天解决的实际问题；
-- 输入、输出和不做范围；
+- 输入与输出；
+- 只有存在技术歧义、安全风险或验收混淆时才说明排除项；
 - 需要补充的最小知识；
 - 文件与接口框架；
 - 自动测试和固定演示命令；
@@ -130,6 +127,8 @@ Codex 先提供当天任务卡，并在用户确认任务边界后才修改骨�
 - 测试通过但用户无法解释关键状态变化时，不进入下一天；
 - 不允许删除或弱化测试来绕过验收；
 - 验收失败只修当前缺口，不重做整条路线。
+- Day 14 起，单元测试可以使用合成 fixture，但当天运行验收必须包含由项目构建的真实 NCCL 2.21.5 产生的证据。
+- 真实 NCCL、GPU 或集群条件不可用时标记环境阻塞；不得回退到 E01、E02 或手写 JSONL 并宣称当天通过。
 
 ## 4. 每个开发日的固定节奏
 
@@ -154,12 +153,13 @@ Codex 先提供当天任务卡，并在用户确认任务边界后才修改骨�
 | 范围 | 技术 |
 |---|---|
 | E01 | C11、CMake、CTest；必要时由 Python 黑盒测试读取 JSONL |
-| E02—E04 | Python 3.10+、类型标注、`unittest`、JSONL |
+| E02 | Python 3.10+、类型标注、`unittest`；仅作为确定性 fixture |
+| E03—E04 | Python 3.10+、Event v2、JSONL、真实 NCCL 轨迹集成测试 |
 | E05—E06 | C++17、CMake、CTest、POSIX shared memory、原子变量 |
 | 平台探测 | 已验证的 Crater 平台镜像：Python 3.12、PyTorch 2.6.0a0（NVIDIA 24.12）、CUDA 12.6、V100 |
 | NCCL 接入 | NCCL 2.21.5、Ubuntu 22.04、GCC/G++ 11、CUDA devel 镜像 |
 
-Day 03/04 优先复用已经通过 Gloo 与 CUDA 探针的 Crater 平台镜像；更换镜像时必须重新运行最小探针并在对应实验 README 中记录实际版本。最终 E06 使用原生程序直接链接 NCCL 2.21.5，不以 PyTorch 自带 NCCL 作为插桩验收依据。
+Day 03/04 优先复用已经通过 Gloo 与 CUDA 探针的 Crater 平台镜像；更换镜像时必须重新运行最小探针并在对应实验 README 中记录实际版本。Day 14 起所有运行实验使用原生程序直接链接项目构建的 NCCL 2.21.5，不以 PyTorch 自带 NCCL 或模拟器作为插桩与分析验收依据。
 
 ## 6. 仓库结构
 
@@ -217,22 +217,23 @@ mycroft-nccl-reproduction/
     └── nccl/
 ```
 
-`third_party/nccl/` 在 Day 13 固定到 NCCL 2.21.5 的明确 tag/commit，供源码映射使用；Day 23 起才编译并修改该版本。实际 NCCL 修改通过 fork/submodule 或可复查 patch 保存；不能在未跟踪的嵌套 Git 工作区中修改后丢失历史。
+`third_party/nccl/` 在 Day 13 固定到 NCCL 2.21.5 的明确 tag/commit；Day 14 起编译该版本，Day 16 起才在功能分支中加入可复查插桩。实际 NCCL 修改通过 fork/submodule 或可复查 patch 保存；不能在未跟踪的嵌套 Git 工作区中修改后丢失历史。
 
 ## 7. 系统主数据流
 
 ```text
-E01 Ring 事件 ─┐
-               ├─> E03 版本化 Event ─> E04 Trigger/RCA
-E02 三进度轨迹 ┘                         ^
-                                         |
-NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
-                                                        |
-                                                        v
-                                              Crater 共享文件系统
+真实 NCCL 2.21.5
+        |
+        v
+completion/state tracepoint
+        |
+        v
+E05 本 Pod 共享内存 -> 独立 reader -> Event v2 JSONL -> E04 Trigger/RCA
+
+E01/E02 ---------------------------> 单元回归输入（不作为运行验收）
 ```
 
-论文完整实现使用本机共享内存、异步 agent 和 Python 后端。本项目只复现这条关键数据路径；共享内存是 Pod/主机本地资源，不跨机器共享。每个 rank/Pod 写独立 JSONL，最后由 E04 汇总。
+论文实现使用本机共享内存、异步 agent 和后端分析。本项目复现其中关键路径：共享内存只在 Pod/主机本地使用，每个 rank 输出独立事件流，E04 再按 communicator、operation、rank 和 channel 恢复并分析。Day 14 起的实验结论必须来自上图的真实 NCCL 主路径；E01/E02 只负责让边界测试保持确定、快速和可重复。
 
 ## 8. 26 个开发日总览
 
@@ -243,10 +244,12 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 | 05—07 | E01 | 独立实现的 4-rank Ring 依赖模拟器 |
 | 08—10 | E02 | GPU/Proxy/Network 三进度状态机 |
 | 11—13 | E03 | Event v1/v2、乱序恢复、NCCL 2.21.5 映射 |
-| 14—17 | E04 | Trigger、MinOp/MinData、RCA、L1 验收 |
-| 18—20 | E05 | 共享内存循环缓冲区和 reader |
-| 21—22 | Crater 多机 | 双物理节点 Socket/RDMA 基线 |
-| 23—26 | E06 | 修改版 NCCL、原生 workload、真实插桩、L2 验收 |
+| 14—17 | E06 前置 | NCCL 构建、原生 workload、真实 completion/state trace |
+| 18—19 | E05 | 真实事件共享内存、非阻塞 reader 和压力运行 |
+| 20 | E06 故障输入 | 真实 NCCL 控制流软件延迟和证据集 |
+| 21—23 | E04 | 基于真实轨迹的 Trigger、MinOp/MinData、RCA 和 L1 |
+| 24—25 | Crater 多机 | 插桩版 NCCL 双物理节点 Socket/RDMA 端到端 |
+| 26 | E06 | 真实 NCCL 开销、丢事件和 L2 验收 |
 
 ## 9. 每日任务卡
 
@@ -400,7 +403,7 @@ experiments/e01_ring_dependency/
 
 **实际问题**：用三个归一化累计量构造有先后约束的确定性发送侧分析 fixture，不声称复刻 NCCL 执行时序。
 
-**最小补充知识**：只区分发送侧的数据准备、请求提交和本地请求完成；具体 NCCL 字段来源留到 Day 13，动态正确性留到 E06。
+**最小补充知识**：只区分发送侧的数据准备、请求提交和本地请求完成；具体 NCCL 字段来源留到 Day 13，动态正确性留到 Day 17 的真实 NCCL state log。
 
 **文件框架**：
 
@@ -414,7 +417,7 @@ experiments/e02_progress_state_machine/
 
 **Codex 搭建**：三个 actor 接口、tick/scheduler 骨架、正常 fixture 和单调性断言。
 
-**核心逻辑与理解重点**：实现抽象 fixture 中 `GPU_ready >= RDMA_transmitted >= RDMA_done` 的正常推进和逻辑步记录；真实字段来源与单位由 Day 13 映射、E06 动态验证。
+**核心逻辑与理解重点**：实现抽象 fixture 中 `GPU_ready >= RDMA_transmitted >= RDMA_done` 的正常推进和逻辑步记录；真实字段来源由 Day 13 映射，单位与运行语义由 Day 17 的真实 NCCL state log 验证。
 
 **验收与预期现象**：正常轨迹最终三者相等，任何时刻均不违反单调性和先后不变量。
 
@@ -514,188 +517,31 @@ third_party/nccl/              # pin 到 NCCL 2.21.5 的明确 tag/commit
 
 **Gate E03**：Event v1 保持冻结并继续可读。进入 Day 14 前发现 v1 缺少真实时间、completion 和字节数，因此按本规则发布兼容 Event v2；不能静默改变 v1 语义。
 
-### Day 14：E04 时间窗口与 Trigger
+### Day 14：E06 可复现 NCCL 2.21.5 构建与加载基线
 
-**实际问题**：从连续轨迹中找出值得进入根因分析的时间窗口。
+**实际问题**：先证明项目能稳定构建并加载指定版本的真实 NCCL，后续所有运行实验都建立在这份二进制上。
 
-**文件框架**：
-
-```text
-src/mycroft/analysis/
-├── window.py
-├── trigger.py
-└── result.py
-tests/analysis/test_trigger.py
-```
-
-**Codex 搭建**：正常、停滞、吞吐下降、间隔增大 fixture 和参数接口。
-
-**核心逻辑与理解重点**：实现完成日志缺失的停滞触发，以及默认“吞吐减半/operation 间隔翻倍”的可配置慢速触发。
-
-**验收与预期现象**：正常短时波动不触发；固定停滞和慢速用例在预期窗口触发；输出只标记异常时间和触发类型，不提前声称根因。
-
-**建议 commit**：`feat(e04): implement configurable anomaly triggers`
-
-### Day 15：E04 MinOp 与 MinData
-
-**实际问题**：先定位落后 operation，再在同一 operation 内比较数据进度。
-
-**Codex 搭建**：多 rank 最后状态 fixture、并列最小值、缺失 rank 和 operation rollover 测试。
-
-**核心逻辑与理解重点**：实现 `CheckMinOp` 和 `CheckMinData`，保留并列候选和输入证据。
-
-**验收与预期现象**：operation 落后时优先输出 MinOp；operation 一致时才比较 MinData；并列时不任意挑选唯一 rank。
-
-**建议 commit**：`feat(e04): locate lagging operations and data progress`
-
-### Day 16：E04 RCA 状态表、依赖链和置信边界
-
-**实际问题**：把候选 rank 的三进度状态与上下游证据组合成可解释结论。
-
-**文件框架**：`rca.py`、`evidence.py`、`tests/analysis/test_rca.py`。
-
-**Codex 搭建**：论文状态条件、发送端/接收端对照 fixture 和结构化 `RcaResult`。
-
-**核心逻辑与理解重点**：实现未开始、未发送、未送达、GPU 未准备规则；沿依赖边区分 root candidate 和 affected rank；输出 local/remote cause 和 evidence gap。
-
-**验收与预期现象**：受阻 rank 不会被误报为唯一根因；证据不充分时输出候选集合和置信边界。
-
-**建议 commit**：`feat(e04): produce dependency-backed RCA evidence`
-
-### Day 17：E04 固定故障套件与 L1 验收
-
-**实际问题**：证明整个本机最小复现可演示、可回归，而不是只在一个样例上工作。
-
-**故障集合**：GPU producer 延迟、Proxy 发送延迟、网络完成延迟、rank 整体停止、正常负载不均。
-
-**Codex 搭建**：端到端测试矩阵、expected JSON、CLI 输出契约和 L1 验收清单。
-
-**核心逻辑与理解重点**：连接版本化 Event、Trigger、MinOp/MinData 和 RCA；生成文本/JSON 报告与依赖时间线。
-
-**验收与预期现象**：
-
-- 每类故障均有固定输入和期望输出；
-- 正常负载不均不会被简单判故障；
-- 所有异常结果包含候选、受影响 rank、证据和边界；
-- 从干净 clone 可一条命令重现演示。
-
-**建议 commit**：`feat(e04): complete Mycroft L1 end-to-end analyzer`
-
-**Gate L1**：用户演示并解释结果后，L1 才能标为已验证。
-
-### Day 18：E05 固定事件 ABI 与共享内存生命周期
-
-**实际问题**：定义能够被 NCCL 写入、被独立 reader 稳定读取的二进制事件格式。
-
-**最小补充知识**：POD/standard-layout、字节对齐、版本号、POSIX shared memory、进程生命周期。
-
-**文件框架**：
-
-```text
-runtime/
-├── CMakeLists.txt
-├── include/mycroft_trace/event_abi.h
-├── include/mycroft_trace/shm_region.h
-├── src/shm_region.cpp
-└── tests/test_event_abi.cpp
-```
-
-**Codex 搭建**：ABI 结构、静态尺寸断言、create/open/close/unlink 接口和失败测试。
-
-**核心逻辑与理解重点**：实现共享内存创建、映射、只读/读写打开、清理和版本校验。
-
-**验收与预期现象**：两个独立进程能映射同一段内存；版本或容量不匹配时拒绝读取；异常退出后有明确清理办法。
-
-**建议分支/commit**：`feature/e05-shm-abi`；`feat(e05): define trace ABI and shared memory lifecycle`
-
-### Day 19：E05 单写单读循环缓冲区
-
-**实际问题**：让业务写入方不因 reader 变慢而阻塞。
-
-**最小补充知识**：SPSC ring、write/read sequence、原子变量、acquire/release 的最小含义；不展开通用无锁算法课程。
-
-**文件框架**：`ring_buffer.h/.cpp`、`tests/test_ring_buffer.cpp`。
-
-**Codex 搭建**：接口、容量 4 的确定性测试、慢 reader 和 wrap-around fixture。
-
-**核心逻辑与理解重点**：实现 reserve/publish/read、序号判断、覆盖策略和 dropped counter。
-
-**验收与预期现象**：writer 不等待；wrap-around 后 reader 只读到有效完整记录；覆盖数量与 dropped counter 一致；ThreadSanitizer 在环境允许时无数据竞争。
-
-**建议 commit**：`feat(e05): implement non-blocking SPSC trace ring`
-
-### Day 20：E05 reader、JSONL 导出和压力验收
-
-**实际问题**：把二进制事件稳定转换成 E04 能消费的当前 Event schema，并保留 Event v1 兼容读取。
-
-**文件框架**：`runtime/tools/trace_reader.cpp`、`runtime/tests/test_reader_e2e.cpp`，压力结果记录在 E05 README。
-
-**Codex 搭建**：reader CLI、writer workload、慢 reader 参数、E04 validator 接口和压力脚本。
-
-**核心逻辑与理解重点**：实现批量读取、二进制到 JSONL 转换、丢事件标记、优雅停止和 rank 文件命名。
-
-**验收与预期现象**：高频 writer 不被 reader 阻塞；正常负载零丢失；故意溢出时丢失可观测；导出文件通过版本化 Event validator 和 E04 parser。
-
-**建议 commit/PR**：`feat(e05): export shared-memory traces to versioned events`，通过 PR 合并 E05 分支。
-
-### Day 21：Crater 双物理节点 Socket NCCL
-
-**实际问题**：先验证多节点调度和 NCCL TCP 路径，把 RDMA 变量留到下一天。
-
-**最小补充知识**：一进程一 Pod、rank/world size、NCCL bootstrap 与 data transport、Socket 路径。
-
-**文件框架**：`cluster/crater/probes/ddp_smoke.py`、`run_ddp_socket.sh`，Socket 证据记录在 Crater 实验 README。
-
-**Codex 搭建**：DDP 接口、正确性测试、页面配置表和 NCCL 日志检查项。
-
-**核心逻辑、理解与平台操作**：实现 NCCL process group 和 GPU AllReduce；Master/Worker 各 1 GPU；Allow List 选择两台同型号节点；设置诊断用 `NCCL_IB_DISABLE=1` 和 `NCCL_DEBUG=INFO`。
-
-**验收与预期现象**：作业详情确认两个 Pod 位于不同物理节点；AllReduce 正确；日志出现 `NET/Socket`；若落到同一节点则本日不通过并重新调度。
-
-**建议 commit**：`feat(crater): establish two-node NCCL socket baseline`
-
-### Day 22：Crater 双物理节点 RDMA NCCL
-
-**实际问题**：在唯一变量为网络路径的条件下，从 Socket 切换到 RDMA。
-
-**最小补充知识**：InfiniBand、RDMA、HCA、CQE、GPU Direct 的最小角色；`ibstat`、`ibv_devices`、`ulimit -l` 分别说明什么。
-
-**文件框架**：`run_ddp_rdma.sh`、`docs/crater/RDMA检查清单.md`，RDMA 证据记录在 Crater 实验 README。
-
-**Codex 搭建**：RDMA 页面填写表、命令检查清单和 README 中的 Socket/RDMA 对照表。
-
-**核心逻辑、理解与平台操作**：为所有角色启用一致 RDMA 配置；确认 IB 设备和 memlock；移除 Socket 强制开关；设置 `NCCL_DEBUG=INFO` 与 `NCCL_DEBUG_SUBSYS=INIT,NET`。
-
-**验收与预期现象**：两个物理节点、同型号 GPU、AllReduce 正确；日志明确出现 `NET/IB` 而非回退 `NET/Socket`；无法获取 RDMA 时标为环境阻塞，不伪造通过。
-
-**建议 commit**：`feat(crater): validate two-node NCCL RDMA transport`
-
-**Gate Crater**：用户能独立完成创建、提交、查看 Pod/Node、读取日志、停止作业和保存脱敏证据。
-
-### Day 23：E06 可复现镜像与 NCCL 2.21.5 构建
-
-**实际问题**：建立能稳定编译修改版 NCCL 的环境，并证明版本确实为 2.21.5。
+**输入与输出**：输入为固定到官方 `v2.21.5-1` 的源码；输出为可复现的构建脚本、`libnccl.so`、版本清单和最小动态加载检查。
 
 **文件框架**：
 
 ```text
 cluster/crater/images/Dockerfile
 cluster/crater/scripts/build_nccl.sh
-third_party/nccl/
 instrumentation/nccl-2.21.5/README.md
+third_party/nccl/
 ```
 
-**Codex 搭建**：Dockerfile/build script 骨架、版本检查和 smoke link test。
+**核心逻辑与理解重点**：使用 CUDA devel 环境编译未插桩 NCCL；记录 tag、commit、CUDA、编译器和构建参数；通过 `ncclGetVersion`、动态链接路径和 smoke program 同时证明实际加载的是项目构建版本。
 
-**核心逻辑、理解与平台操作**：选择 CUDA devel 基础镜像；安装编译/IB 工具；固定 NCCL 2.21.5；完成未插桩版本编译；记录实际版本矩阵。
 
-**验收与预期现象**：`nvcc`、G++、CMake 可用；NCCL 2.21.5 编译成功；最小链接测试运行；构建过程不依赖交互式手工修补。
+**验收与预期现象**：真实 `libnccl.so` 构建成功；smoke program 能加载并返回 2.21.5；动态链接检查指向项目产物。若缺 CUDA devel 或构建资源，标记环境阻塞，不能用模拟器代替验收。
 
-**建议分支/commit**：`feature/e06-nccl-instrumentation`；`build(e06): reproduce NCCL 2.21.5 toolchain`
+**建议分支/commit**：从 Day 14 起使用功能分支；`build(e06): reproduce NCCL 2.21.5 toolchain`
 
-### Day 24：E06 原生双 rank 最小 AllReduce
+### Day 15：E06 原生同机双 rank AllReduce 基线
 
-**实际问题**：绕开 PyTorch 自带 NCCL，直接运行和验证我们编译的 `libnccl.so`。
+**实际问题**：绕开 PyTorch 自带 NCCL，证明项目构建的 NCCL 能执行真实 collective。
 
 **文件框架**：
 
@@ -708,53 +554,160 @@ workloads/minimal_allreduce/
 └── tests/
 ```
 
-**Codex 搭建**：CLI、socket/bootstrap 接口、错误处理框架、单进程单元测试和 Crater 启动脚本。
+**核心逻辑与理解重点**：rank 0 创建并分发 `ncclUniqueId`；两个原生进程各绑定一张 GPU，初始化 communicator，在同一物理节点运行多种消息大小和连续多个 AllReduce，并同步校验结果。
 
-**核心逻辑与理解重点**：rank 0 获取 `ncclUniqueId`，通过最小 TCP bootstrap 分发；各 rank 设置 GPU、初始化 communicator、执行 AllReduce、同步并验证结果。
+**验收与预期现象**：两个 rank 数值结果正确；至少三个连续 operation 完成；`ldd` 或等价证据明确指向 Day 14 构建的 NCCL 2.21.5；记录算法、协议和 transport 日志。拿不到同机双 GPU 时标记环境阻塞，不退回 E01/E02 作为验收。
 
-**验收与预期现象**：两个 Crater Pod 上各一个原生进程；结果正确；动态链接检查明确指向项目构建的 NCCL 2.21.5；不依赖 MPI 或 PyTorch NCCL。
+**建议 commit**：`feat(e06): run native two-rank NCCL baseline`
 
-**建议 commit**：`feat(e06): run native two-rank NCCL all-reduce`
+### Day 16：E06 真实 completion log 与 operation identity
 
-### Day 25：E06 接入 E05 与真实 tracepoints
+**实际问题**：先从真实 NCCL 运行中取得论文所述 completion log，并动态确认 operation 身份和时间语义。
 
-**实际问题**：把 Event v2 分析契约和 Day 13 的候选三进度来源接入 NCCL 2.21.5 真实关键路径，并动态验证映射。
+**核心逻辑与理解重点**：在真实 enqueue/proxy 生命周期中关联 `commHash`、`opCount`、rank、channel 和 `ncclInfo.nBytes`；寻找并验证 CollOp 完成聚合点。start/end timestamp 必须来自同一进程单调时钟。热路径先写入预分配的有界内存记录，workload 结束后再导出，不在 Proxy 热循环格式化 JSON 或执行阻塞文件 I/O。
 
-**Codex 搭建**：NCCL 内部 tracing API 接口、构建开关、patch 生成脚本和真实轨迹集成测试骨架。
+**验收与预期现象**：Day 15 workload 产生真实 Event v2 completion 记录；同一 CollOp 跨 channel 的身份一致；连续 operation 的序号稳定；开始时间不晚于结束时间；字节数与 workload 输入一致。若只能证明 Proxy 子操作完成而不能证明 CollOp 完成，事件必须按真实语义命名，不能冒充 completion log。
 
-**核心逻辑与理解重点**：依据 Day 13 映射确认最终插桩位置；初始化共享内存；写 completion/state log；更新 operation identity 和三个进度量；在同 Pod 启动 reader。
+**建议 commit**：`feat(e06): trace real NCCL operation completion`
+
+### Day 17：E06 真实周期 state log 与进度字段验证
+
+**实际问题**：用真实 NCCL Proxy 运行验证 Day 13 的三进度候选，而不是继续从 E02 推断。
+
+**核心逻辑与理解重点**：第一版限定 Ring + SIMPLE 发送路径；在 CollOp 进行期间按配置周期采样；生产目标约 100 ms，验证时可缩短周期或增大真实消息量，但必须记录实际配置。动态验证 GPU readiness 派生量、`sub->transmitted`、`sub->done` 和 `nsteps/sliceSteps` 的单位、单调性与生命周期；明确它们表示本地发送侧进度，不解释成远端 GPU 已消费。
+
+**验收与预期现象**：足够长的真实 AllReduce 至少产生两条 state log 和一条 completion log；日志只在 operation 活跃期间出现；每个已验证字段能追溯到实际源码转换；不支持的协议或路径显式标记。E02 只可用于单元回归，不能作为本日运行证据。
+
+**建议 commit**：`feat(e06): validate real NCCL progress tracepoints`
+
+### Day 18：E05 真实事件 ABI 与共享内存生命周期
+
+**实际问题**：把 Day 16—17 已验证的真实记录放入稳定二进制 ABI，并让 NCCL 进程与独立 reader 映射同一段本机共享内存。
+
+**文件框架**：
+
+```text
+runtime/
+├── CMakeLists.txt
+├── include/mycroft_trace/event_abi.h
+├── include/mycroft_trace/shm_region.h
+├── src/shm_region.cpp
+└── tests/test_event_abi.cpp
+```
+
+**核心逻辑与理解重点**：固定 POD/standard-layout 事件、尺寸、对齐和版本；实现 create/open/close/unlink；NCCL 初始化时按显式开关创建 writer 区域，独立进程只读打开。ABI 字段来自真实 completion/state log，不为 E02 tick 设计生产字段。
+
+**验收与预期现象**：运行真实 AllReduce 时 writer 和 reader 映射成功；版本或容量不匹配时拒绝读取；关闭 tracing 时 NCCL 基线行为不变；异常退出后有明确清理方式。
+
+**建议 commit**：`feat(e05): connect real NCCL events to shared memory`
+
+### Day 19：E05 非阻塞 SPSC、reader 与真实压力运行
+
+**实际问题**：让真实 NCCL 高频写事件时不等待 reader，并把二进制记录转换成 Event v2 JSONL。
+
+**文件框架**：`ring_buffer.h/.cpp`、`runtime/tools/trace_reader.cpp`、`runtime/tests/`。
+
+**核心逻辑与理解重点**：实现 reserve/publish/read、write/read sequence、acquire/release、wrap-around、覆盖策略、dropped counter、批量读取和优雅停止。单元测试可以使用固定记录覆盖边界，但运行验收必须由连续真实 AllReduce 产生数据。
+
+**验收与预期现象**：正常真实负载零丢失；故意放慢 reader 时 writer 不阻塞且 dropped counter 可观察；reader 输出通过 Event v2 validator；事件数能与真实 workload operation 数和采样周期对账。
+
+**建议 commit**：`feat(e05): stream real NCCL traces through nonblocking reader`
+
+### Day 20：E06 真实控制流软件延迟与证据集
+
+**实际问题**：在实际 NCCL 2.21.5 控制流中制造可重复异常，得到后续分析器的真实输入。
+
+**核心逻辑与理解重点**：加入默认关闭、按 rank/op/channel 精确选择的延迟开关。最低验收范围是在 `ncclNet->isend` 前设置基于单调时钟的 release deadline：到期前本轮不提交请求但继续运行 Proxy progress 和周期采样，禁止用阻塞 `sleep` 冻结整个 Proxy 线程。只有源码位置和日志能够证明语义时才增加其他注入点。该实验是修改版真实 NCCL 的软件延迟，不宣称等价于物理 GPU、NIC 或 RDMA 故障。
+
+**验收与预期现象**：基线、仅插桩、插桩加延迟三组真实运行数值均正确；只有目标路径主动等待；completion/state log 出现可解释差异；关闭开关后行为恢复；保存小型脱敏 Event v2 样例供回归测试。
+
+**建议 commit**：`feat(e06): inject deterministic delay into real NCCL path`
+
+### Day 21：E04 基于真实轨迹的时间窗口与 Trigger
+
+**实际问题**：从 Day 19—20 的真实 completion/state log 中找出需要进入根因分析的时间点。
+
+**文件框架**：
+
+```text
+src/mycroft/analysis/
+├── window.py
+├── trigger.py
+└── result.py
+tests/analysis/test_trigger.py
+```
+
+**核心逻辑与理解重点**：窗口必须接收明确的采集水位或截止时间；state log 持续存在但窗口内没有 completion 时触发 failure；使用真实 completion 的 start/end/bytes 计算吞吐和 CollOp interval；减半/翻倍阈值可配置，并从正常真实运行建立基线。
+
+**验收与预期现象**：正常真实轨迹不触发；Day 20 延迟轨迹在预期窗口触发；输出只包含异常时间、类型、输入数值和阈值，不提前声称根因。合成 fixture 只用于边界单元测试，不能单独完成本日验收。
+
+**建议 commit**：`feat(e04): trigger on real NCCL trace windows`
+
+### Day 22：E04 基于真实多 rank 轨迹的 MinOp 与 MinData
+
+**实际问题**：在同一次真实运行的多个 rank 中先找 operation 落后者，再比较同一 operation 的已验证进度。
+
+**核心逻辑与理解重点**：实现 `CheckMinOp` 和 `CheckMinData`；只比较 Day 17 已证明单位一致的字段；保留并列候选、缺失事件、dropped record 和不支持路径，不把最晚 rank 自动当根因。
+
+**验收与预期现象**：Day 20 的真实多 rank 轨迹得到可复查候选；operation 落后时优先输出 MinOp；operation 一致时才使用 MinData；改变输入到达顺序不改变结果；数据缺口降低置信度而不是被静默忽略。
+
+**建议 commit**：`feat(e04): locate lagging ranks in real NCCL traces`
+
+### Day 23：E04 真实轨迹 RCA 与 L1 验收
+
+**实际问题**：把真实 Trigger、MinOp/MinData、发送侧状态和依赖证据组成最小可解释 RCA。
+
+**文件框架**：`rca.py`、`evidence.py`、真实样例的 expected result 和 CLI。
+
+**核心逻辑与理解重点**：依据论文状态表输出主动异常候选、受影响 rank、证据链和证据缺口；只对 Day 17—20 已动态确认的路径作结论，未采集接收侧或硬件证据时必须保留边界。
+
+**验收与预期现象**：同机真实 NCCL 基线不报故障；真实软件延迟运行输出与注入位置相符的候选而非绝对硬件结论；报告能追溯到原始 Event v2；用户能解释为什么最慢 rank 可能只是受影响者。
+
+**Gate L1**：L1 现在要求真实 NCCL 单机双 rank 端到端证据；纯 E01/E02 或手写 Event fixture 不能通过。
+
+**建议 commit**：`feat(e04): complete real-trace L1 analyzer`
+
+### Day 24：Crater 双物理节点 Socket 端到端
+
+**实际问题**：把同机已验证链路迁移到两个物理节点，并明确使用 TCP Socket transport。
+
+**核心逻辑、理解与平台操作**：两个 Pod 各运行一个直接链接项目 NCCL 2.21.5 的原生 rank；启用 tracing、reader 和 E04；使用调度约束确认不同物理节点；设置诊断用 `NCCL_IB_DISABLE=1` 与 `NCCL_DEBUG=INFO`。
+
+**验收与预期现象**：AllReduce 正确；动态链接指向项目 NCCL；日志出现 `NET/Socket`；两端 Event v2 可恢复为同一批 operation；正常运行不触发异常，软件延迟运行能够触发。两个 Pod 落在同一节点时不通过。
+
+**建议 commit**：`feat(crater): validate instrumented NCCL over two-node socket`
+
+### Day 25：Crater 双物理节点 RDMA 端到端
+
+**实际问题**：在保持 workload、NCCL、插桩和分析器不变的条件下，只把 transport 从 Socket 切换到 RDMA。
+
+**核心逻辑、理解与平台操作**：检查 IB 设备、link layer、memlock 和 NCCL NET 日志；移除 Socket 强制开关；记录真实 connection/QP 元数据并验证其生命周期；继续运行正常和软件延迟两组。
+
+**验收与预期现象**：两个物理节点、同型号 GPU、AllReduce 正确；日志明确出现 `NET/IB` 且没有静默回退；Event v2 与 E04 端到端可用；无法获得 RDMA 时标为环境阻塞，不能用 Socket 或模拟轨迹冒充。
+
+**Gate Crater**：用户能核对 Pod/Node、动态库、transport、rank 日志和脱敏证据。
+
+**建议 commit**：`feat(crater): validate instrumented NCCL over RDMA`
+
+### Day 26：E06 开销、丢事件和 L2 最终验收
+
+**实际问题**：证明真实 NCCL 插桩不仅能产生日志，而且能在不破坏正确性的前提下支持检测和定位。
+
+**核心逻辑、理解与平台操作**：在相同环境运行未插桩基线、开启插桩和开启软件延迟三组矩阵；比较正确性、运行时间、事件数、dropped counter、Trigger 和 RCA；不把小样本外推为生产性能结论。
 
 **验收与预期现象**：
 
-- 未开启 tracing 时行为与基线一致；
-- 开启后每个 rank 产生独立 JSONL；
-- 真实事件通过版本化 Event validator；
-- operation/channel/rank 能恢复成完整时间线；
-- 所有 patch 可从干净 NCCL 2.21.5 重放。
-
-**建议 commit**：`feat(e06): instrument NCCL progress into shared memory`
-
-### Day 26：E06 软件延迟、开销和 L2 最终验收
-
-**实际问题**：证明真实 NCCL 事件能支持检测和定位，而不是只完成日志采集。
-
-**Codex 搭建**：基线/插桩/延迟三组运行矩阵、L2 README 证据小节和端到端断言。
-
-**核心逻辑、理解与平台操作**：加入可控、默认关闭的软件延迟；运行正常与异常 workload；收集 rank JSONL；运行 E04；比较正确性、运行时间、事件数和 dropped counter。
-
-**验收与预期现象**：
-
-1. 正常与插桩版本 AllReduce 数值均正确；
+1. 三组真实 NCCL AllReduce 数值均正确；
 2. 正常真实轨迹不触发故障；
 3. 延迟用例在预期窗口触发；
-4. RCA 输出主动异常 rank、受影响 rank、证据和边界；
-5. 记录插桩前后运行时间，不把小样本结果夸大为生产开销结论；
-6. 丢事件为零，或在报告中明确说明数量与影响；
-7. README 能从干净环境复现实验。
+4. RCA 输出候选、受影响 rank、证据和边界；
+5. 动态链接、NCCL 版本和 Socket/RDMA 路径均有证据；
+6. 丢事件为零，或报告明确数量及对结论的影响；
+7. 从干净环境可按文档重现实验。
 
-**建议 commit/PR**：`feat(e06): complete real NCCL tracing and L2 validation`，通过 PR 合并 E06 分支。
+**建议 commit/PR**：`feat(e06): complete real NCCL L2 validation`
 
-**Gate L2**：用户完成演示、核对两个物理节点和 RDMA/NCCL 日志，并明确确认所有验收项后，项目才标为 L2 已验证。
+**Gate L2**：用户完成演示并核对真实 NCCL、两个物理节点、RDMA、事件链和分析报告后，项目才标为 L2 已验证。
 
 ## 10. 阶段验收矩阵
 
@@ -764,25 +717,27 @@ workloads/minimal_allreduce/
 | E01 | 为什么最慢 rank 不一定是根因？ | 正常/延迟 JSONL、因果链、数值测试 |
 | E02 | 哪个执行者没有推进，还缺什么证据？ | 三类故障轨迹、状态分类测试 |
 | E03 | 事件为何属于同一次 op/flow？ | 乱序恢复测试、2.21.5 字段来源表 |
-| L1 | 分析器为什么输出该根因候选？ | 五类 fixture、expected RCA、时间线 |
-| E05 | reader 慢时 writer 会发生什么？ | 压力结果、dropped counter、当前 Event 输出 |
-| Crater Multi-node | 两个 Pod 是否真在两台机器，NCCL 走哪条网络？ | Node 字段、Socket/IB 日志、正确性结果 |
+| NCCL Baseline | 是否真正加载并运行项目 NCCL 2.21.5？ | 版本、动态链接、同机双 rank 正确性 |
+| Trace Semantics | completion/state 字段是否来自已验证真实路径？ | 源码位置、真实 Event v2、operation 与字节数对账 |
+| L1 | 分析器为什么输出该根因候选？ | 真实正常/延迟轨迹、expected RCA、证据链 |
+| E05 | reader 慢时真实 NCCL writer 会发生什么？ | 真实压力运行、dropped counter、Event v2 输出 |
+| Crater Multi-node | 两个 Pod 是否真在两台机器，项目 NCCL 走哪条网络？ | Node 字段、动态库、Socket/IB 日志、正确性结果 |
 | L2 | 真实插桩是否支持定位且不破坏 NCCL？ | 动态链接、真实 JSONL、延迟 RCA、开销报告 |
 
 ## 11. GitHub 工作流
 
-### 11.1 Day 01—Day 17
+### 11.1 Day 01—Day 13
 
-- 每个验收通过的开发日至少形成一个通过测试的 commit，Day 01—Day 17 直接提交 `main`；
+- 每个验收通过的开发日至少形成一个通过测试的 commit，Day 01—Day 13 直接提交 `main`；
 - commit 前运行统一检查脚本；
 - 不提交失败测试、WIP、二进制或大型输出；
 - commit 和 push 必须由用户明确发出指令；push 默认由用户执行；
 - commit 前核对暂存边界，不把下一 Day 的工作混入当前提交；
 - 推荐格式：`type(scope): subject`。
 
-### 11.2 Day 18—Day 26
+### 11.2 Day 14—Day 26
 
-- E05/E06 修改底层运行时和 NCCL 代码时使用短分支；Crater 配置或探针是否单独建分支由任务风险决定；
+- Day 14 起涉及构建、workload、E05/E06 底层运行时或 NCCL 源码时使用短分支；Crater 配置或探针是否单独建分支由任务风险决定；
 - 分支只覆盖一个阶段或明确子任务；
 - 用户完成自验后创建 PR；
 - PR 描述包含目的、测试、预期现象、实际现象和风险；
@@ -812,7 +767,7 @@ workloads/minimal_allreduce/
 2. 明确已经验证到哪一层；
 3. 区分代码错误、配置错误和平台条件；
 4. 不把 Socket 成功写成 RDMA 成功；
-5. 不把本机模拟成功写成 L2 完成；
+5. Day 14 起不把模拟器、手写 Event 或仅单元测试成功写成当天实验通过、L1 或 L2 完成；
 6. 等待用户或管理员处理后继续同一任务。
 
 任何范围、验收或顺序变化都必须在本路线图中留下简短变更记录，并在得到用户确认后执行；稳定协作规则的变化更新 `AGENTS.md`。
@@ -850,3 +805,13 @@ v0.3 在不改变 E01—E06、26 个开发日和 L2 验收目标的前提下：
 - 建立 `AGENTS.md` 作为稳定规则入口；
 - 从工作树删除早期 L1/学习路线文档，由 Git 历史保留原始内容，并将本文确立为当前执行路线；
 - 统一结对分工、最小文档、Git 授权、实际 Crater 环境和动态状态规则。
+
+
+v0.4 根据用户要求重排 Day 14—26，并保持总开发日数量和最终范围不变：
+
+- Day 14—17 前置项目 NCCL 2.21.5 构建、原生双 rank workload、completion log 和周期 state log；
+- Day 18—20 用真实事件完成共享内存/reader，并在真实 NCCL 控制流中生成确定性软件延迟证据；
+- Day 21—23 才基于真实轨迹实现 Trigger、MinOp/MinData 和 RCA，L1 不再接受纯合成数据；
+- Day 24—26 完成插桩版 NCCL 的双节点 Socket、RDMA 和 L2；
+- E01、E02 和手写 Event 保留为单元回归，不再作为后续实验验收证据；
+- 从 Day 14 起底层工作使用功能分支和 PR。
