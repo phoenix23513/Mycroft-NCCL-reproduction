@@ -13,6 +13,11 @@ PYTHONPATH="$project_root/src${PYTHONPATH:+:$PYTHONPATH}" \
   python3 -m unittest discover -s "$project_root/tests/schema" \
   -p "test_*.py"
 
+echo "[check] Event trace recovery"
+PYTHONPATH="$project_root/src${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 -m unittest discover -s "$project_root/tests/trace" \
+  -p "test_*.py"
+
 echo "[check] C++ smoke build"
 if command -v cmake >/dev/null 2>&1; then
   cmake -S "$project_root" -B "$build_dir"
