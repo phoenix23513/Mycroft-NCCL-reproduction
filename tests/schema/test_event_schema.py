@@ -17,6 +17,11 @@ from mycroft.schema import (  # noqa: E402
     EventContext,
     EventKind,
     EventValidationError,
+    LogicalTime,
+    OperationCompletionPayload,
+    ProgressSnapshotPayload,
+    SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
     TimeDomain,
     adapt_e01_record,
     adapt_e01_trace,
@@ -42,6 +47,28 @@ def e01_record() -> dict[str, object]:
         "value": 11,
         "contributor_mask": 2,
     }
+
+
+def completion_event() -> Event:
+    return Event(
+        schema_version=SCHEMA_VERSION,
+        event_id="completion:comm-7:3:2",
+        event_kind=EventKind.OPERATION_COMPLETION,
+        source="nccl_trace",
+        context=EventContext(
+            communicator_id="comm-7",
+            op_seq=3,
+            collective="all_reduce",
+            rank=2,
+            channel=None,
+        ),
+        time=LogicalTime(2_000, TimeDomain.NCCL_MONOTONIC_NS),
+        dependencies=(),
+        payload=OperationCompletionPayload(
+            started_at_ns=1_000,
+            message_bytes=4_096,
+        ),
+    )
 
 
 class EventSchemaTests(unittest.TestCase):
@@ -87,6 +114,73 @@ class EventSchemaTests(unittest.TestCase):
         self.assertEqual(event.time.domain, TimeDomain.E02_TICK)
         self.assertEqual(Event.from_dict(event.to_dict()), event)
         self.assertNotIn("phase", event.to_json())
+
+    def test_operation_completion_v2_round_trip(self) -> None:
+        event = completion_event()
+
+        validate_event(event)
+        self.assertEqual(SCHEMA_VERSION, 2)
+        self.assertEqual(SUPPORTED_SCHEMA_VERSIONS, frozenset({1, 2}))
+        self.assertIsNone(event.context.channel)
+        self.assertEqual(Event.from_json(event.to_json()), event)
+
+    def test_v1_event_remains_readable(self) -> None:
+        event = adapt_e02_snapshot(
+            ProgressSnapshot(1, 1, 0, 0),
+            total_chunks=4,
+            context=self.context,
+        )
+        data = event.to_dict()
+        data["schema_version"] = 1
+
+        restored = Event.from_dict(data)
+
+        self.assertEqual(restored.schema_version, 1)
+        self.assertEqual(restored.time.domain, TimeDomain.E02_TICK)
+
+    def test_real_progress_v2_accepts_monotonic_time(self) -> None:
+        event = Event(
+            schema_version=SCHEMA_VERSION,
+            event_id="progress:comm-7:3:2:1:1000",
+            event_kind=EventKind.PROGRESS_SNAPSHOT,
+            source="nccl_trace",
+            context=self.context,
+            time=LogicalTime(1_000, TimeDomain.NCCL_MONOTONIC_NS),
+            dependencies=(),
+            payload=ProgressSnapshotPayload(
+                total_chunks=8,
+                gpu_ready=4,
+                rdma_transmitted=3,
+                rdma_done=2,
+            ),
+        )
+
+        validate_event(event)
+        with self.assertRaisesRegex(EventValidationError, "time domain"):
+            validate_event(replace(event, schema_version=1))
+
+    def test_completion_rejects_invalid_v2_contract(self) -> None:
+        event = completion_event()
+        invalid_events = (
+            replace(event, schema_version=1),
+            replace(event, context=replace(event.context, channel=0)),
+            replace(
+                event,
+                time=replace(event.time, domain=TimeDomain.E02_TICK),
+            ),
+            replace(
+                event,
+                payload=replace(event.payload, started_at_ns=2_001),
+            ),
+            replace(
+                event,
+                payload=replace(event.payload, message_bytes=-1),
+            ),
+        )
+        for invalid in invalid_events:
+            with self.subTest(event=invalid):
+                with self.assertRaises(EventValidationError):
+                    validate_event(invalid)
 
     def test_e01_trace_adapter_preserves_message_and_rank_dependencies(self) -> None:
         send = e01_record()
@@ -145,6 +239,7 @@ class EventSchemaTests(unittest.TestCase):
             replace(self.context, communicator_id=""),
             replace(self.context, op_seq=-1),
             replace(self.context, rank=-1),
+            replace(self.context, channel=None),
         )
         for context in invalid_contexts:
             with self.subTest(context=context):
@@ -174,7 +269,7 @@ class EventSchemaTests(unittest.TestCase):
         event = adapt_e01_record(e01_record(), communicator_id="comm-7")
 
         with self.assertRaisesRegex(EventValidationError, "schema_version"):
-            validate_event(replace(event, schema_version=2))
+            validate_event(replace(event, schema_version=3))
         with self.assertRaisesRegex(EventValidationError, "ProgressSnapshotPayload"):
             validate_event(
                 replace(event, event_kind=EventKind.PROGRESS_SNAPSHOT)
@@ -214,7 +309,7 @@ class EventSchemaTests(unittest.TestCase):
             context=self.context,
         )
         data = event.to_dict()
-        self.assertEqual(data["schema_version"], 1)
+        self.assertEqual(data["schema_version"], SCHEMA_VERSION)
         self.assertEqual(
             set(data),
             {

@@ -1,6 +1,6 @@
 # Event 字段在 NCCL 2.21.5 中的来源
 
-本文把 Mycroft 论文中的观测字段、项目 Event v1 和固定版本 NCCL 源码连接起来。源码基线是官方 tag `v2.21.5-1`，commit `ab2b89c4c339bd7f816fbc114a4b05d386b66290`。
+本文把 Mycroft 论文中的观测字段、项目版本化 Event 契约和固定版本 NCCL 源码连接起来。源码基线是官方 tag `v2.21.5-1`，commit `ab2b89c4c339bd7f816fbc114a4b05d386b66290`。
 
 状态含义：
 
@@ -75,14 +75,23 @@ Day 08—10 的 E02 是发送侧抽象，不是对 `ncclProxySubArgs` 的逐字�
 
 接收侧 `recvProxyProgress()` 还有 `posted/received/flushed/transmitted/done`，同名 `transmitted` 和 `done` 的语义与发送侧不同。因此 E02 的不变量只对应发送侧简化模型，不能直接套在接收侧计数器上。
 
-## Event v1 的冻结边界
+## Event v1 与 v2 的兼容边界
 
-Day 13 验收后冻结的是分析器需要的公共身份和两种 payload：
+Day 13 冻结的 Event v1 继续可读，其内容是分析器的公共身份和两种 payload：
 
 - `(communicator_id, op_seq, collective, rank, channel)`；
 - Ring action 或三进度快照。
 
-当前 Event v1 没有 `msg_size`、`IP`、`Gid`、`GPU_id` 或 `QP_id`。这些字段属于采集元数据，不强塞进每一种 Event payload。E06 可在采集端用它们建立 rank/channel/connection 元数据表，再把分析所需身份转换为 Event v1。若后续证明 E04 必须逐事件携带这些字段，则应发布 Event v2 或兼容转换，不能静默改变 v1。
+进入 Day 14 前发现 v1 无法表达真实时间上的停滞、吞吐和 operation 间隔，因此发布兼容的 Event v2，而不改变 v1：
+
+- `NCCL_MONOTONIC_NS` 表示由采集进程的单调时钟取得的纳秒时间；
+- `OPERATION_COMPLETION` 的 `event.time.value` 是完成时间，payload 保存同一时钟域的 `started_at_ns` 和 operation 逻辑 `message_bytes`；
+- completion 是 operation 级事件，因此 `channel=null`；其他事件仍必须有非负 channel；
+- v2 progress snapshot 可以使用真实单调时间，也继续允许 E02 的合成 tick；v1 的时间域规则保持不变。
+
+进程单调时钟不是跨主机同步时钟。原始纳秒值只能在同一 rank 的恢复时间线内直接排序；跨 rank 分析应先计算各自的持续时间、吞吐或间隔，再比较这些派生指标。不能用不同主机的原始 monotonic 值建立全局先后关系。
+
+`IP`、`Gid`、`GPU_id` 和 `QP_id` 仍属于采集元数据，不强塞进每一种 Event payload。E06 可用它们建立 rank/channel/connection 元数据表。completion 的真实聚合插桩点同样要在 E06 动态确认，当前契约只规定分析输入语义，不宣称采集实现已经完成。
 
 ## 论文与本项目的边界
 

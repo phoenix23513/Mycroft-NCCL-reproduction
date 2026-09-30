@@ -1,4 +1,4 @@
-"""Typed Event v1 records shared by E01 and E02 adapters."""
+"""Typed, versioned events shared by simulation and NCCL adapters."""
 
 from __future__ import annotations
 
@@ -10,28 +10,36 @@ from typing import Any
 
 
 class EventKind(str, Enum):
-    """The payload variant carried by an Event v1 record."""
+    """The typed payload variant carried by a versioned event."""
 
     RING_ACTION = "ring_action"
     PROGRESS_SNAPSHOT = "progress_snapshot"
+    OPERATION_COMPLETION = "operation_completion"
 
 
 class TimeDomain(str, Enum):
-    """Logical clock semantics; values from different domains are incomparable."""
+    """Clock semantics; values are comparable only inside one recovered flow.
+
+    NCCL monotonic values are process-local and not synchronized across hosts.
+    """
 
     E01_EVENT_ORDER = "e01_event_order"
     E02_TICK = "e02_tick"
+    NCCL_MONOTONIC_NS = "nccl_monotonic_ns"
 
 
 @dataclass(frozen=True)
 class EventContext:
-    """Identity shared by events belonging to one collective operation."""
+    """Identity shared by events belonging to one collective operation.
+
+    Channel is absent only for operation-wide Event v2 records.
+    """
 
     communicator_id: str
     op_seq: int
     collective: str
     rank: int
-    channel: int
+    channel: int | None
 
 
 @dataclass(frozen=True)
@@ -59,7 +67,7 @@ class RingActionPayload:
 
 @dataclass(frozen=True)
 class ProgressSnapshotPayload:
-    """E02-specific cumulative GPU/Proxy/Network progress evidence."""
+    """Cumulative GPU/Proxy/Network progress evidence."""
 
     total_chunks: int
     gpu_ready: int
@@ -67,7 +75,17 @@ class ProgressSnapshotPayload:
     rdma_done: int
 
 
-EventPayload = RingActionPayload | ProgressSnapshotPayload
+@dataclass(frozen=True)
+class OperationCompletionPayload:
+    """Operation-level completion data measured on a monotonic clock."""
+
+    started_at_ns: int
+    message_bytes: int
+
+
+EventPayload = (
+    RingActionPayload | ProgressSnapshotPayload | OperationCompletionPayload
+)
 
 
 @dataclass(frozen=True)
@@ -84,7 +102,7 @@ class Event:
     payload: EventPayload
 
     def to_dict(self) -> dict[str, Any]:
-        """Validate and return a JSON-compatible Event v1 mapping."""
+        """Validate and return a JSON-compatible versioned event mapping."""
         from .validate import validate_event
 
         validate_event(self)
@@ -100,12 +118,17 @@ class Event:
                 "value": self.payload.value,
                 "contributor_mask": self.payload.contributor_mask,
             }
-        else:
+        elif isinstance(self.payload, ProgressSnapshotPayload):
             payload = {
                 "total_chunks": self.payload.total_chunks,
                 "gpu_ready": self.payload.gpu_ready,
                 "rdma_transmitted": self.payload.rdma_transmitted,
                 "rdma_done": self.payload.rdma_done,
+            }
+        else:
+            payload = {
+                "started_at_ns": self.payload.started_at_ns,
+                "message_bytes": self.payload.message_bytes,
             }
 
         return {
@@ -139,7 +162,7 @@ class Event:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Event:
-        """Parse and validate one Event v1 mapping."""
+        """Parse and validate one versioned event mapping."""
         _require_exact_keys(
             data,
             {
@@ -205,7 +228,7 @@ class Event:
                 value=payload_data["value"],
                 contributor_mask=payload_data["contributor_mask"],
             )
-        else:
+        elif event_kind is EventKind.PROGRESS_SNAPSHOT:
             _require_exact_keys(
                 payload_data,
                 {
@@ -221,6 +244,16 @@ class Event:
                 gpu_ready=payload_data["gpu_ready"],
                 rdma_transmitted=payload_data["rdma_transmitted"],
                 rdma_done=payload_data["rdma_done"],
+            )
+        else:
+            _require_exact_keys(
+                payload_data,
+                {"started_at_ns", "message_bytes"},
+                "operation_completion payload",
+            )
+            payload = OperationCompletionPayload(
+                started_at_ns=payload_data["started_at_ns"],
+                message_bytes=payload_data["message_bytes"],
             )
 
         dependencies_data = data["dependencies"]

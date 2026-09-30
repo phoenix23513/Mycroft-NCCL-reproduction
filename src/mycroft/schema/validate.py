@@ -1,4 +1,4 @@
-"""Semantic validation for Event v1 records."""
+"""Semantic validation for supported event schema versions."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from .event import (
     EventContext,
     EventKind,
     LogicalTime,
+    OperationCompletionPayload,
     ProgressSnapshotPayload,
     RingActionPayload,
     TimeDomain,
@@ -32,7 +33,7 @@ def validate_event(event: Event) -> None:
         raise EventValidationError("event_kind must be an EventKind")
     _require_nonempty_string("source", event.source)
 
-    _validate_context(event.context)
+    _validate_context(event)
     _validate_time(event.time)
     _validate_dependencies(event)
 
@@ -48,16 +49,34 @@ def validate_event(event: Event) -> None:
                 "progress_snapshot event requires ProgressSnapshotPayload"
             )
         _validate_progress_snapshot(event)
+    elif event.event_kind is EventKind.OPERATION_COMPLETION:
+        if not isinstance(event.payload, OperationCompletionPayload):
+            raise EventValidationError(
+                "operation_completion event requires "
+                "OperationCompletionPayload"
+            )
+        _validate_operation_completion(event)
 
 
-def _validate_context(context: EventContext) -> None:
+def _validate_context(event: Event) -> None:
+    context = event.context
     if not isinstance(context, EventContext):
         raise EventValidationError("context must be an EventContext")
     _require_nonempty_string("context.communicator_id", context.communicator_id)
     _require_int("context.op_seq", context.op_seq, minimum=0)
     _require_nonempty_string("context.collective", context.collective)
     _require_int("context.rank", context.rank, minimum=0)
-    _require_int("context.channel", context.channel, minimum=0)
+    if event.event_kind is EventKind.OPERATION_COMPLETION:
+        if event.schema_version < 2:
+            raise EventValidationError(
+                "operation_completion requires schema_version 2"
+            )
+        if context.channel is not None:
+            raise EventValidationError(
+                "operation_completion requires context.channel to be null"
+            )
+    else:
+        _require_int("context.channel", context.channel, minimum=0)
 
 
 def _validate_time(time: LogicalTime) -> None:
@@ -131,9 +150,13 @@ def _validate_progress_snapshot(event: Event) -> None:
     payload = event.payload
     if not isinstance(payload, ProgressSnapshotPayload):
         raise EventValidationError("invalid progress_snapshot payload")
-    if event.time.domain is not TimeDomain.E02_TICK:
+    allowed_domains = {TimeDomain.E02_TICK}
+    if event.schema_version >= 2:
+        allowed_domains.add(TimeDomain.NCCL_MONOTONIC_NS)
+    if event.time.domain not in allowed_domains:
         raise EventValidationError(
-            "progress_snapshot requires time domain e02_tick"
+            "progress_snapshot requires time domain e02_tick or, for "
+            "schema v2, nccl_monotonic_ns"
         )
     _require_int("payload.total_chunks", payload.total_chunks, minimum=1)
     for name, value in (
@@ -151,6 +174,26 @@ def _validate_progress_snapshot(event: Event) -> None:
         raise EventValidationError(
             "invalid progress state: expected rdma_done <= rdma_transmitted "
             "<= gpu_ready <= total_chunks"
+        )
+
+
+def _validate_operation_completion(event: Event) -> None:
+    payload = event.payload
+    if not isinstance(payload, OperationCompletionPayload):
+        raise EventValidationError("invalid operation_completion payload")
+    if event.schema_version < 2:
+        raise EventValidationError(
+            "operation_completion requires schema_version 2"
+        )
+    if event.time.domain is not TimeDomain.NCCL_MONOTONIC_NS:
+        raise EventValidationError(
+            "operation_completion requires time domain nccl_monotonic_ns"
+        )
+    _require_int("payload.started_at_ns", payload.started_at_ns, minimum=0)
+    _require_int("payload.message_bytes", payload.message_bytes, minimum=0)
+    if payload.started_at_ns > event.time.value:
+        raise EventValidationError(
+            "operation completion cannot precede started_at_ns"
         )
 
 

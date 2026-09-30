@@ -75,6 +75,17 @@ lid or gid (according to link_layer)
 
 运行时进度事件只引用紧凑的 connection ID，避免在 Proxy 热循环重复写长地址结构。
 
+## Event v2 的采集要求
+
+Event v2 为后续分析规定输入契约，但没有把候选点伪装成已完成插桩：
+
+- 进度事件应在 T4 使用采集进程的同一单调时钟，写入 `NCCL_MONOTONIC_NS`；
+- operation completion 只能在该 operation 的所有 channel/sub 都完成后生成，`event.time.value` 是完成时间；确切聚合位置仍须 E06 动态确认；
+- `started_at_ns` 必须与完成时间来自同一进程、同一时钟域；
+- `message_bytes` 使用 operation 级 `ncclInfo.nBytes`，不能用单个 Proxy slice 的 `nbytes` 冒充；
+- completion 是 operation 级记录，所以 `channel=null`；channel 级 progress 仍保留实际 channel；
+- 不同 rank/主机的原始 monotonic 纳秒值不可直接比较，只能先在各 rank 内计算 duration、throughput 或 interval。
+
 ## E06 前必须完成的动态验证
 
 1. 两个 rank 连续运行至少三个 AllReduce，确认相同 CollOp 的 `(commHash, opCount >> 1)` 跨 rank 对齐；

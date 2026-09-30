@@ -1,4 +1,4 @@
-"""Flow timeline recovery contracts for Event v1 streams."""
+"""Flow timeline recovery contracts for versioned event streams."""
 
 from __future__ import annotations
 
@@ -47,12 +47,20 @@ class RecoveryResult:
 
 
 def flow_key_for(event: Event) -> FlowKey:
-    """Return the smallest key whose events share comparable logical time."""
+    """Return the smallest key whose events share comparable logical time.
+
+    Channel -1 is an internal key for operation-wide completion events; it is
+    never serialized as a real NCCL channel.
+    """
     validate_event(event)
     return FlowKey(
         operation=operation_key_for(event),
         rank=event.context.rank,
-        channel=event.context.channel,
+        channel=(
+            event.context.channel
+            if event.context.channel is not None
+            else -1
+        ),
         event_kind=event.event_kind,
         time_domain=event.time.domain,
     )

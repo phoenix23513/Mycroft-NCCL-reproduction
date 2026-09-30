@@ -7,7 +7,7 @@
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：Day 13 已固定官方 NCCL 2.21.5 源码，完成字段来源、候选插桩点和 E02 抽象边界修正，并通过版本检查与全量回归；下一步进入 Day 14 Trigger
+- 当前状态：进入 Day 14 前的契约纠错已完成实现：Event v1 保持可读，Event v2 补充进程本地单调时间和 operation completion；尚未开始 Day 14 Trigger
 
 ## 1. 计划要解决的问题
 
@@ -223,7 +223,7 @@ mycroft-nccl-reproduction/
 
 ```text
 E01 Ring 事件 ─┐
-               ├─> E03 统一 Event v1 ─> E04 Trigger/RCA
+               ├─> E03 版本化 Event ─> E04 Trigger/RCA
 E02 三进度轨迹 ┘                         ^
                                          |
 NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
@@ -242,7 +242,7 @@ NCCL 2.21.5 tracepoint ─> E05 本 Pod shm ─> reader ─> rank JSONL
 | 02—04 | Crater 基础 | 页面概念、CPU 双 Pod、单 GPU 基线 |
 | 05—07 | E01 | 独立实现的 4-rank Ring 依赖模拟器 |
 | 08—10 | E02 | GPU/Proxy/Network 三进度状态机 |
-| 11—13 | E03 | Event v1、乱序恢复、NCCL 2.21.5 映射 |
+| 11—13 | E03 | Event v1/v2、乱序恢复、NCCL 2.21.5 映射 |
 | 14—17 | E04 | Trigger、MinOp/MinData、RCA、L1 验收 |
 | 18—20 | E05 | 共享内存循环缓冲区和 reader |
 | 21—22 | Crater 多机 | 双物理节点 Socket/RDMA 基线 |
@@ -512,7 +512,7 @@ third_party/nccl/              # pin 到 NCCL 2.21.5 的明确 tag/commit
 
 **建议 commit**：`docs(e03): map trace identity to NCCL 2.21.5`
 
-**Gate E03**：Event v1 冻结。后续若更改字段，必须提升 schema version 或提供兼容转换。
+**Gate E03**：Event v1 保持冻结并继续可读。进入 Day 14 前发现 v1 缺少真实时间、completion 和字节数，因此按本规则发布兼容 Event v2；不能静默改变 v1 语义。
 
 ### Day 14：E04 时间窗口与 Trigger
 
@@ -570,7 +570,7 @@ tests/analysis/test_trigger.py
 
 **Codex 搭建**：端到端测试矩阵、expected JSON、CLI 输出契约和 L1 验收清单。
 
-**核心逻辑与理解重点**：连接 Event v1、Trigger、MinOp/MinData 和 RCA；生成文本/JSON 报告与依赖时间线。
+**核心逻辑与理解重点**：连接版本化 Event、Trigger、MinOp/MinData 和 RCA；生成文本/JSON 报告与依赖时间线。
 
 **验收与预期现象**：
 
@@ -626,7 +626,7 @@ runtime/
 
 ### Day 20：E05 reader、JSONL 导出和压力验收
 
-**实际问题**：把二进制事件稳定转换成 E04 能消费的 Event v1。
+**实际问题**：把二进制事件稳定转换成 E04 能消费的当前 Event schema，并保留 Event v1 兼容读取。
 
 **文件框架**：`runtime/tools/trace_reader.cpp`、`runtime/tests/test_reader_e2e.cpp`，压力结果记录在 E05 README。
 
@@ -634,9 +634,9 @@ runtime/
 
 **核心逻辑与理解重点**：实现批量读取、二进制到 JSONL 转换、丢事件标记、优雅停止和 rank 文件命名。
 
-**验收与预期现象**：高频 writer 不被 reader 阻塞；正常负载零丢失；故意溢出时丢失可观测；导出文件通过 Event v1 validator 和 E04 parser。
+**验收与预期现象**：高频 writer 不被 reader 阻塞；正常负载零丢失；故意溢出时丢失可观测；导出文件通过版本化 Event validator 和 E04 parser。
 
-**建议 commit/PR**：`feat(e05): export shared-memory traces to Event v1`，通过 PR 合并 E05 分支。
+**建议 commit/PR**：`feat(e05): export shared-memory traces to versioned events`，通过 PR 合并 E05 分支。
 
 ### Day 21：Crater 双物理节点 Socket NCCL
 
@@ -718,7 +718,7 @@ workloads/minimal_allreduce/
 
 ### Day 25：E06 接入 E05 与真实 tracepoints
 
-**实际问题**：把 Event v1 分析契约和 Day 13 的候选三进度来源接入 NCCL 2.21.5 真实关键路径，并动态验证映射。
+**实际问题**：把 Event v2 分析契约和 Day 13 的候选三进度来源接入 NCCL 2.21.5 真实关键路径，并动态验证映射。
 
 **Codex 搭建**：NCCL 内部 tracing API 接口、构建开关、patch 生成脚本和真实轨迹集成测试骨架。
 
@@ -728,7 +728,7 @@ workloads/minimal_allreduce/
 
 - 未开启 tracing 时行为与基线一致；
 - 开启后每个 rank 产生独立 JSONL；
-- 真实事件通过 Event v1 validator；
+- 真实事件通过版本化 Event validator；
 - operation/channel/rank 能恢复成完整时间线；
 - 所有 patch 可从干净 NCCL 2.21.5 重放。
 
@@ -765,7 +765,7 @@ workloads/minimal_allreduce/
 | E02 | 哪个执行者没有推进，还缺什么证据？ | 三类故障轨迹、状态分类测试 |
 | E03 | 事件为何属于同一次 op/flow？ | 乱序恢复测试、2.21.5 字段来源表 |
 | L1 | 分析器为什么输出该根因候选？ | 五类 fixture、expected RCA、时间线 |
-| E05 | reader 慢时 writer 会发生什么？ | 压力结果、dropped counter、Event v1 输出 |
+| E05 | reader 慢时 writer 会发生什么？ | 压力结果、dropped counter、当前 Event 输出 |
 | Crater Multi-node | 两个 Pod 是否真在两台机器，NCCL 走哪条网络？ | Node 字段、Socket/IB 日志、正确性结果 |
 | L2 | 真实插桩是否支持定位且不破坏 NCCL？ | 动态链接、真实 JSONL、延迟 RCA、开销报告 |
 

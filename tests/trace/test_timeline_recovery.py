@@ -9,6 +9,7 @@ from mycroft.schema import (
     EventContext,
     EventKind,
     LogicalTime,
+    OperationCompletionPayload,
     ProgressSnapshotPayload,
     RingActionPayload,
     SCHEMA_VERSION,
@@ -97,6 +98,38 @@ def ring_event(
     )
 
 
+def completion_event(
+    communicator_id: str,
+    op_seq: int,
+    rank: int,
+    completed_at_ns: int,
+) -> Event:
+    return Event(
+        schema_version=SCHEMA_VERSION,
+        event_id=(
+            f"completion:{communicator_id}:{op_seq}:{rank}:"
+            f"{completed_at_ns}"
+        ),
+        event_kind=EventKind.OPERATION_COMPLETION,
+        source="day13_correction_fixture",
+        context=EventContext(
+            communicator_id=communicator_id,
+            op_seq=op_seq,
+            collective="all_reduce",
+            rank=rank,
+            channel=None,
+        ),
+        time=LogicalTime(
+            completed_at_ns, TimeDomain.NCCL_MONOTONIC_NS
+        ),
+        dependencies=(),
+        payload=OperationCompletionPayload(
+            started_at_ns=completed_at_ns - 100,
+            message_bytes=4_096,
+        ),
+    )
+
+
 def mixed_fixture() -> tuple[Event, ...]:
     comm_a_op0_tick0 = progress_event("comm-a", 0, 0, 0, 0)
     comm_a_op0_tick1 = progress_event(
@@ -145,6 +178,21 @@ class TimelineRecoveryTests(unittest.TestCase):
             ),
         )
         self.assertNotEqual(flow_key_for(progress), flow_key_for(ring))
+
+    def test_operation_completion_uses_operation_wide_timeline(self) -> None:
+        progress = progress_event("comm-a", 7, 2, 3, 0)
+        completion = completion_event("comm-a", 7, 2, 1_000)
+
+        result = recover_timelines((completion, progress))
+
+        self.assertEqual(len(result.timelines), 2)
+        completion_timeline = next(
+            timeline
+            for timeline in result.timelines
+            if timeline.key.event_kind is EventKind.OPERATION_COMPLETION
+        )
+        self.assertEqual(completion_timeline.key.channel, -1)
+        self.assertEqual(completion_timeline.events, (completion,))
 
     def test_groups_multiple_communicators_operations_and_channels(self) -> None:
         events = mixed_fixture()

@@ -1,4 +1,4 @@
-"""Operation-level grouping contracts for Event v1 streams."""
+"""Operation-level grouping contracts for versioned event streams."""
 
 from __future__ import annotations
 

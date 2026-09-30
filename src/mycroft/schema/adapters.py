@@ -1,4 +1,4 @@
-"""Adapters from the existing E01 and E02 records to Event v1."""
+"""Adapters from existing E01 and E02 records to the current Event schema."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def adapt_e01_record(
     event_id: str | None = None,
     dependencies: Iterable[str] = (),
 ) -> Event:
-    """Convert one current E01 JSONL object into a validated Event v1."""
+    """Convert one current E01 JSONL object into a validated current-version Event."""
     op_seq = _required(record, "op_seq")
     rank = _required(record, "rank")
     channel = _required(record, "channel")
@@ -94,7 +94,7 @@ def adapt_e02_snapshot(
     event_id: str | None = None,
     dependencies: Iterable[str] = (),
 ) -> Event:
-    """Convert one E02 snapshot plus explicit operation context to Event v1."""
+    """Convert one E02 snapshot plus explicit context to a current-version Event."""
     tick = _snapshot_field(snapshot, "tick")
     resolved_event_id = event_id
     if resolved_event_id is None:
