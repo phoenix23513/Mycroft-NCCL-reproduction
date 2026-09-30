@@ -1,6 +1,14 @@
 # E02——通信进度状态机
 
-Day 08 已完成正常三阶段流水线。Day 09 在同一模型上加入可配置的 GPU、Proxy 和 Network 临时停滞；整个 E02 仍不调用真实 GPU、RDMA 或 NCCL。
+Day 08 建立确定性的三阶段抽象流水线。Day 09 在同一模型上加入可配置的 GPU、Proxy 和 Network 合成停滞；整个 E02 不调用真实 GPU、RDMA 或 NCCL。
+
+## 模型定位和边界
+
+E02 是供 Event、Trigger 和 RCA 测试使用的**发送侧归一化分析 fixture**，不是 NCCL 执行模拟器。字段名沿用 Mycroft 论文中的 `GPU_ready`、`RDMA_transmitted` 和 `RDMA_done`，但不代表 NCCL 2.21.5 中存在三个同名变量。
+
+模型只保留三项分析语义：累计进度单调不减、上游进度约束下游进度、快照只描述积压位置而不直接证明故障组件。它有意不模拟协议 step/slice、一次调用推进多个 step、接收侧反压、LL/LL128、多个 channel/QP 或远端 GPU 消费。
+
+Day 13 的源码映射进一步确认：发送侧 `sub->transmitted` 和 `sub->done` 是后两个累计量的候选来源；`gpu_ready` 需要从 GPU 写 FIFO/tail 后的 readiness 条件派生；`total_chunks` 也必须由 `nsteps/sliceSteps` 等真实单位归一化。以上候选关系要到 E06 动态插桩时验证，E02 自身不能证明它们成立。
 
 ## 三个逻辑执行者
 
@@ -16,11 +24,11 @@ Day 08 已完成正常三阶段流水线。Day 09 在同一模型上加入可配
 0 <= rdma_done <= rdma_transmitted <= gpu_ready <= total_chunks
 ~~~
 
-这里的 Proxy 是 NCCL 所在进程内的 CPU 线程，不是另一台机器，也不是 GPU 线程。Day 08 暂时只模拟职责和先后关系；QP、请求提交和 CQE 的具体机制在需要时再补充。
+这里的 Proxy actor 只代表受 NCCL CPU Proxy 启发的逻辑阶段，不是对真实 `sendProxyProgress()` 的逐字段复刻，也不是另一台机器或 GPU 线程。
 
 ## Tick 模型
 
-每个 tick 中，三个 actor 都读取同一份 previous 快照，再分别计算下一时刻的累计值。因此一个新 chunk 不能在同一个 tick 内连续穿过三个阶段。
+`tick` 是合成轨迹的离散逻辑步，不对应物理时间，也不对应一次真实 Proxy 回调。每个 tick 中，三个 actor 都读取同一份 `previous` 快照，再分别计算下一时刻的累计值；“每拍最多推进一个 chunk”只用于产生确定且易验证的测试轨迹。
 
 四个 chunk 的正常预期轨迹是：
 
@@ -47,15 +55,15 @@ python3 experiments/e02_progress_state_machine/cli.py --chunks 4
 
 预期输出七行 JSONL，从全零快照开始，到三个累计量均为 4 结束。
 
-## Day 09 故障注入框架
+## Day 09 合成停滞框架
 
 `FaultSpec` 用三个字段描述一次临时停滞：
 
 - `target`：`gpu_producer`、`proxy_transmitter` 或 `network_completer`；
-- `start_tick`：故障开始影响的 `current.tick`；
+- `start_tick`：合成停滞开始影响的 `current.tick`；
 - `duration_ticks`：连续停滞的 tick 数。
 
-故障窗口采用半开区间：
+停滞窗口采用半开区间：
 
 ~~~text
 start_tick <= tick < start_tick + duration_ticks
@@ -63,7 +71,7 @@ start_tick <= tick < start_tick + duration_ticks
 
 核心实现必须接受任意合法参数，不能针对固定轨迹写特殊分支。`4/3/2` 只作为可复查示例，不是唯一测试输入。
 
-三个 actor 的故障分支已经实现：故障窗口内保持各自的 `previous` 累计值，窗口结束后恢复正常推进。参数化测试覆盖两组规模和窗口配置下的全部三个 target。
+三个 actor 的合成停滞分支已经实现：窗口内保持各自的 `previous` 累计值，窗口结束后恢复正常推进。`FaultSpec.target` 只是生成已知测试轨迹的开关，不表示已经向真实 GPU、NCCL Proxy 或网络注入故障。参数化测试覆盖两组规模和窗口配置下的全部三个 target。
 
 唯一人工验收命令为：
 

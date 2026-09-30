@@ -9,8 +9,8 @@
 ## 当前进度
 
 - **E01 已完成**：4-rank、8-chunk Ring ReduceScatter/AllGather、JSONL 事件、单点延迟注入和因果传播。
-- **E02 已完成**：GPU、Proxy 和 Network 三阶段正常推进、三层临时停滞以及论文四类快照状态分类均已通过验收。
-- **E03 开发中**：Event v1 已统一事件格式，并能在乱序、多 communicator、多 operation 和多 channel 输入下恢复确定性的局部时间线；下一步映射 NCCL 2.21.5 字段来源和候选插桩点。
+- **E02 已完成**：发送侧归一化分析 fixture、三类合成停滞和论文四类快照状态分类均已通过验收；它不作为真实 NCCL 执行或插桩正确性的证据。
+- **E03 已完成**：Event v1、乱序时间线恢复、官方 NCCL 2.21.5 固定版本、字段来源和候选插桩点均已通过验证；真实映射的动态确认保留到 E06。
 - Crater 上已经完成 CPU/Gloo 双进程 AllReduce 与单 GPU PyTorch/CUDA 环境验证。
 
 详细任务与每日进度见 [`docs/plans/Mycroft_26日开发路线图.md`](docs/plans/Mycroft_26日开发路线图.md)。
@@ -62,7 +62,7 @@ ctest --test-dir .build --output-on-failure
 | 阶段 | 要解决的问题 | 主要产物 |
 |---|---|---|
 | E01 | Ring 通信中的数据流和因果依赖如何形成 | Ring 模拟器、事件轨迹、延迟传播 |
-| E02 | 一次传输如何依次经过 GPU、Proxy 和网络 | 三阶段进度状态机 |
+| E02 | 如何用统一累计量构造确定性的分析输入 | 发送侧归一化进度 fixture |
 | E03 | 如何跨 communicator、operation 和 channel 唯一识别事件 | Event v1 与 NCCL 源码字段映射 |
 | E04 | 如何从轨迹中发现停滞并定位根因 | Trigger、MinOp/MinData 和 RCA |
 | E05 | 如何低开销地把运行时事件交给独立分析进程 | 共享内存循环缓冲区与 reader |
@@ -89,7 +89,7 @@ ctest --test-dir .build --output-on-failure
 
 This repository independently reproduces the core path of Mycroft-style NCCL stall diagnosis: communication modeling, progress-state tracing, causal analysis, a shared-memory event channel, and finally NCCL 2.21.5 instrumentation.
 
-E01 provides a deterministic Ring AllReduce simulator, JSONL traces, and causal delay propagation. E02 is complete with normal three-stage progress, component-specific temporary stalls, and bounded snapshot-state classification. E03 now provides Event v1 plus deterministic local-timeline recovery across shuffled multi-communicator, multi-operation, and multi-channel inputs. NCCL 2.21.5 field-source and instrumentation mapping is next. See the [26-day development roadmap](docs/plans/Mycroft_26日开发路线图.md) for the current plan.
+E01 provides a deterministic Ring AllReduce simulator, JSONL traces, and causal delay propagation. E02 provides a deterministic normalized send-side fixture for analysis tests, not an execution model of NCCL. E03 is complete with Event v1, deterministic local-timeline recovery, and source-grounded candidate mappings to the pinned official NCCL 2.21.5 tree. Runtime confirmation of candidate mappings remains an E06 task. See the [26-day development roadmap](docs/plans/Mycroft_26日开发路线图.md) for the current plan.
 
 ## License
 

@@ -7,7 +7,7 @@
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：Day 12 乱序、多 communicator、多 operation 和多 channel 时间线恢复已通过实现、全量检查与人工验收；下一步进入 Day 13 NCCL 2.21.5 字段来源和候选插桩点映射
+- 当前状态：Day 13 已固定官方 NCCL 2.21.5 源码，完成字段来源、候选插桩点和 E02 抽象边界修正，并通过版本检查与全量回归；下一步进入 Day 14 Trigger
 
 ## 1. 计划要解决的问题
 
@@ -29,7 +29,8 @@
 2. **E02：GPU/Proxy/Network 三段状态机**
    - 模拟 `GPU_ready`、`RDMA_transmitted`、`RDMA_done`；
    - 覆盖 GPU、Proxy 和网络延迟；
-   - 产生可供分析器使用的状态轨迹。
+   - 产生可供分析器使用的归一化状态轨迹；
+   - 只作为确定性分析 fixture，不证明真实 NCCL 字段映射或执行时序。
 3. **E03：统一事件身份与 NCCL 2.21.5 源码映射**
    - 混合多 communicator、多 operation、多 channel 后仍能正确分组；
    - 每个真实身份字段和候选插桩点均有 NCCL 2.21.5 源码依据。
@@ -395,11 +396,11 @@ experiments/e01_ring_dependency/
 
 **Gate E01**：全部通过后，阶段 0—4 从“已讲授”变为“已验证”。
 
-### Day 08：E02 正常三执行者状态机
+### Day 08：E02 正常三执行者抽象 fixture
 
-**实际问题**：把 GPU producer、CPU Proxy 和 Network completion 变成有先后约束的可运行模型。
+**实际问题**：用三个归一化累计量构造有先后约束的确定性发送侧分析 fixture，不声称复刻 NCCL 执行时序。
 
-**最小补充知识**：NCCL Proxy 是进程内 CPU 线程；send 侧的准备、提交、完成含义；只学习理解状态机所需的 QP/CQE 概念。
+**最小补充知识**：只区分发送侧的数据准备、请求提交和本地请求完成；具体 NCCL 字段来源留到 Day 13，动态正确性留到 E06。
 
 **文件框架**：
 
@@ -413,13 +414,13 @@ experiments/e02_progress_state_machine/
 
 **Codex 搭建**：三个 actor 接口、tick/scheduler 骨架、正常 fixture 和单调性断言。
 
-**核心逻辑与理解重点**：实现 `GPU_ready >= RDMA_transmitted >= RDMA_done` 的正常推进和周期性状态记录。
+**核心逻辑与理解重点**：实现抽象 fixture 中 `GPU_ready >= RDMA_transmitted >= RDMA_done` 的正常推进和逻辑步记录；真实字段来源与单位由 Day 13 映射、E06 动态验证。
 
 **验收与预期现象**：正常轨迹最终三者相等，任何时刻均不违反单调性和先后不变量。
 
 **建议 commit**：`feat(e02): model normal GPU proxy network progress`
 
-### Day 09：E02 三层故障注入
+### Day 09：E02 三层合成停滞
 
 **实际问题**：让相同的“collective 变慢”表象产生不同的内部状态证据。
 
@@ -717,7 +718,7 @@ workloads/minimal_allreduce/
 
 ### Day 25：E06 接入 E05 与真实 tracepoints
 
-**实际问题**：把模拟阶段确认的 Event v1 和三进度观测接入 NCCL 2.21.5 真实关键路径。
+**实际问题**：把 Event v1 分析契约和 Day 13 的候选三进度来源接入 NCCL 2.21.5 真实关键路径，并动态验证映射。
 
 **Codex 搭建**：NCCL 内部 tracing API 接口、构建开关、patch 生成脚本和真实轨迹集成测试骨架。
 
