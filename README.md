@@ -11,7 +11,7 @@
 - **E01 已完成**：4-rank、8-chunk Ring ReduceScatter/AllGather、JSONL 事件、单点延迟注入和因果传播。
 - **E02 已完成**：发送侧归一化分析 fixture、三类合成停滞和论文四类快照状态分类均已通过验收；它不作为真实 NCCL 执行或插桩正确性的证据。
 - **E03 已完成并完成契约纠错**：Event v1 保持可读，Event v2 补充真实单调时间与 operation completion；NCCL 2.21.5 字段目前仍是候选，Day 16—17 将用真实运行动态确认。
-- **下一步是 Day 14**：构建并加载项目自己的 NCCL 2.21.5；尚未开始 Day 14 实验。
+- **Day 14 真实构建与加载自检通过，待用户验收**：Crater 已从固定源码构建 NCCL 2.21.5，运行版本与实际加载路径核对通过，脱敏证据已保存。执行入口与结果见 [`instrumentation/nccl-2.21.5/README.md`](instrumentation/nccl-2.21.5/README.md)。
 - Crater 上已经完成 CPU/Gloo 双进程 AllReduce 与单 GPU PyTorch/CUDA 环境验证。
 
 详细任务与每日进度见 [`docs/plans/Mycroft_26日开发路线图.md`](docs/plans/Mycroft_26日开发路线图.md)。

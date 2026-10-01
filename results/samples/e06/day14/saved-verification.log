@@ -1,0 +1,5 @@
+requested_library=<USER_MOUNT>/day14/day14-results/lib/libnccl.so.2.21.5
+loaded_library=<USER_MOUNT>/day14/day14-results/lib/libnccl.so.2.21.5
+nccl_version_code=22105
+nccl_version=2.21.5
+status=PASS

@@ -7,7 +7,7 @@
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：Day 13 与 Event v2 契约纠错已完成；v0.4 已将真实 NCCL 构建前移，下一步是 Day 14 构建与加载基线，尚未执行任何 Day 14 实验
+- 当前状态：Day 13 与 Event v2 契约纠错已完成；Day 14 真实 NCCL 2.21.5 构建与加载自检通过，证据已核对，待用户最终验收
 
 ## 1. 计划要解决的问题
 
@@ -536,6 +536,8 @@ third_party/nccl/
 
 
 **验收与预期现象**：真实 `libnccl.so` 构建成功；smoke program 能加载并返回 2.21.5；动态链接检查指向项目产物。若缺 CUDA devel 或构建资源，标记环境阻塞，不能用模拟器代替验收。
+
+**执行状态**：真实构建与加载自检通过，待用户最终验收。Crater 在 Ubuntu 22.04.4、G++ 11.4.0、CUDA 12.5.82 下从固定且干净的源码完成未插桩 NCCL 构建；临时与持久化库的 `ncclGetVersion` 均返回 `22105`，实际加载路径与指定产物一致，构建和持久化验证退出码均为 0。已保留工具链、构建参数、ELF SONAME 和库 SHA256 的脱敏证据。本地 WSL 仍无 CUDA devel；提供的 Dockerfile 尚未实际构建。用户验收前不标记完成或推进 Day 15。命令、样例与限制见 [`instrumentation/nccl-2.21.5/README.md`](../../instrumentation/nccl-2.21.5/README.md)。
 
 **建议分支/commit**：从 Day 14 起使用功能分支；`build(e06): reproduce NCCL 2.21.5 toolchain`
 

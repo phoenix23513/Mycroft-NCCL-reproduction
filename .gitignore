@@ -44,3 +44,9 @@ results/**
 !results/samples/e01/rank1-delay.jsonl
 !results/samples/e02/
 !results/samples/e02/faults.txt
+!results/samples/e06/
+!results/samples/e06/day14/
+!results/samples/e06/day14/run-status.txt
+!results/samples/e06/day14/build-manifest.txt
+!results/samples/e06/day14/verification.log
+!results/samples/e06/day14/saved-verification.log

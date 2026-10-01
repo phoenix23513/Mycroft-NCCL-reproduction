@@ -41,4 +41,8 @@ python3 -m unittest discover \
   -s "$project_root/experiments/e02_progress_state_machine/tests" \
   -p "test_*.py"
 
+echo "[check] NCCL baseline guards (no CUDA or GPU required)"
+python3 -m unittest discover \
+  -s "$project_root/tests/nccl" -p "test_*.py"
+
 echo "[check] All repository checks passed"
