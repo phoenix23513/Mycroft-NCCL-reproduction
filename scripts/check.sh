@@ -57,4 +57,9 @@ python3 "$project_root/workloads/minimal_allreduce/verify_results.py" \
   --expected-sha256 e4437dd0b48e3ab426b17b394043a0d162f1c9040b32bcf34b5b866e6286132a \
   --require-selection
 
+echo "[check] Day16 capture framework (CPU only; collection not implemented)"
+bash "$project_root/instrumentation/nccl-2.21.5/day16/check_framework.sh"
+python3 -m unittest discover \
+  -s "$project_root/instrumentation/nccl-2.21.5/day16/tests" -p "test_*.py"
+
 echo "[check] All repository checks passed"
