@@ -1,6 +1,6 @@
 # NCCL 2.21.5 Instrumentation
 
-Day 13 使用官方 NCCL submodule 做源码映射；新路线从 Day 14 构建该版本，Day 16 起添加并验证可复查的插桩 patch。
+Day13 使用官方 NCCL submodule 做源码映射；Day14—15 已建立真实构建和原生 workload 基线。当前按 [v0.5 核心复现计划](../../docs/plans/Mycroft_26日开发路线图.md) 的 M1—M5 推进：先确认双节点 NET/RDMA，再验证最小插桩、软件延迟和 Trigger/RCA。
 
 固定基线：
 
@@ -22,14 +22,15 @@ git -C third_party/nccl rev-parse HEAD
 
 文档入口：
 
-- [`tracepoints.md`](tracepoints.md)：候选插桩点、能观察的状态和 Day 16—20 动态验证清单；
+- [`tracepoints.md`](tracepoints.md)：候选插桩点、能观察的状态和 M2—M3 动态验证清单；
 - [`../../docs/architecture/event-field-sources.md`](../../docs/architecture/event-field-sources.md)：论文字段、版本化 Event 与 NCCL 成员之间的映射及限制。
+- [`day16/README.md`](day16/README.md)：已有采集接口、路径限制、核对入口和单文件结果打包；复用于 M2，真实采集尚未实现，Graph/完整 P2P 扩展不在当前执行范围。
 
-Day 13 不包含 NCCL 修改或编译结果；候选点只有经过 Day 16—20 的真实 NCCL 运行验证后才能升级为已确认插桩语义。
+Day13 不包含 NCCL 修改或编译结果；候选点只有经过 M2—M3 的真实 NCCL 运行验证后才能升级为已确认插桩语义。
 
 ## Day 14：未插桩构建与加载基线
 
-当前状态：**真实构建与加载基线已完成，用户已进入 Day 15**。Crater 已使用 CUDA 12.5.82 从固定源码构建并加载未插桩 NCCL 2.21.5，运行版本、实际加载路径和退出码均符合要求。当前 WSL 是 Ubuntu 22.04.5、G++ 11.4.0；有 Make、Python 和 CMake，但未找到 `nvcc`、CUDA Toolkit 或 Docker，`nvidia-smi` 报告 GPU 访问被操作系统阻止。本次真实验证在 Crater 完成，未在 WSL 编译。GPU 不是本日版本检查的前提；Day 15 才需要 GPU 执行 collective。
+Day14 历史结果：**真实构建与加载基线已完成**。Crater 已使用 CUDA 12.5.82 从固定源码构建并加载未插桩 NCCL 2.21.5，运行版本、实际加载路径和退出码均符合要求。当前 WSL 是 Ubuntu 22.04.5、G++ 11.4.0；有 Make、Python 和 CMake，但未找到 `nvcc`、CUDA Toolkit 或 Docker，`nvidia-smi` 报告 GPU 访问被操作系统阻止。本次真实验证在 Crater 完成，未在 WSL 编译。GPU 不是本日版本检查的前提；后续 Day15 的 GPU collective 验证也已完成，见 workload README；本节只记录 Day14 的构建证据。
 
 用户返回的候选环境探针结果（基础镜像公开名称尚未提供）：
 
@@ -213,7 +214,7 @@ status=PASS
 f3fe9df1bb787e0d8f82d60a185c69299ef3806010dcee35565f6b8f6bad7dc4
 ```
 
-本次构建与加载证据已核对，用户已明确进入 Day 15。此结果不包含 GPU collective 验证，Dockerfile 也尚未实际构建；Day 15 使用同一份项目库执行真实双 rank AllReduce，当前进度见 [`workload README`](../../workloads/minimal_allreduce/README.md)。
+Day14 构建与加载证据已核对。此结果不包含 GPU collective 验证，Dockerfile 也尚未实际构建；Day15 已使用项目库执行真实双 rank AllReduce，基线结果见 [`workload README`](../../workloads/minimal_allreduce/README.md)。
 
 本地自动回归命令（不要求 CUDA/GPU，不生成伪 NCCL 库）：
 

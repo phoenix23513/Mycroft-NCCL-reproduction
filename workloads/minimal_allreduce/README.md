@@ -1,8 +1,10 @@
 # Day15：原生同机双 rank AllReduce
 
-当前已在 Crater 的 CUDA 12.5 环境使用 g++ 完成真实编译，并在两张 Tesla V100-SXM2-32GB 上通过双 rank 功能验证。两个 rank 各完成九次 AllReduce，全部元素校验通过，退出码为 0，首轮加载的库版本、路径和 hash 与 Day14 产物一致。随后独立 TRACE 构建与相同 workload 运行也已通过，补齐 rank0 逐操作算法/协议选择；连接记录为 P2P/CUMEM。真实技术证据已核对齐全，当前准备 Day15 提交与 Day16 任务交接。本地 WSL 没有 CUDA Toolkit，离线日志核对在 WSL 完成。
+当前已在 Crater 的 CUDA 12.5 环境使用 g++ 完成真实编译，并在两张 Tesla V100-SXM2-32GB 上通过双 rank 功能验证。两个 rank 各完成九次 AllReduce，全部元素校验通过，退出码为 0，首轮加载的库版本、路径和 hash 与 Day14 产物一致。随后独立 TRACE 构建与相同 workload 运行也已通过，补齐 rank0 逐操作算法/协议选择；连接记录为 P2P/CUMEM。真实技术证据已核对齐全，Day15 已提交并推送（`4638847`）。本地 WSL 没有 CUDA Toolkit，离线日志核对在 WSL 完成。
 
 目标：在同一个 Pod 的两张 GPU 上，用两个原生 C++ 进程运行 Day14 构建的 NCCL 2.21.5。输入是 Day14 产物目录和迭代次数；输出是每个 rank 的库来源、应用阶段标记和数值检查结果。
+
+执行范围、顺序和验收以[当前计划](../../docs/plans/Mycroft_26日开发路线图.md)为准。本文记录已完成的 Day15 同机双 GPU 基线；M1 双节点入口尚未实现。现有 `device=rank`、同 Pod 文件 bootstrap、同时启动两个 rank 的脚本和离线核对只支持此基线，不能直接在每节点一张 GPU 的条件下使用或作为 NET/RDMA 验收。
 
 ## 程序结构
 
@@ -79,7 +81,7 @@ NCCL_ROOT="<Day14产物目录，包含include和lib>" \
 
 `NCCL_ROOT` 使用当前 Crater 中实际路径。脚本不会重新编译 NCCL，也不会下载依赖。直接调用 `run.sh` 时日志留在脚本打印的 `task_dir`；Crater 作业推荐使用下方的持久化运行入口。
 
-### Windows 上传与 Crater 启动
+### Day15 历史复跑：Windows 上传与 Crater 启动
 
 在 WSL 仓库根目录生成新上传包：
 
@@ -110,7 +112,7 @@ NCCL_ROOT="<DAY14_RESULTS>" RESULT_DIR="$PWD/day15-results" \
 
 若沿用的镜像需要 `/crater-start.sh` 包装，保持此前成功的启动方式。运行目录中的 `day15-results` 必须不存在；重试时换成新名字。编译、临时 ID 和中间产物均在 `/tmp`，结果保存到持久化目录。
 
-作业结束下载整个结果目录：
+Day15 当时采用逐文件下载，结果布局如下。这是历史复跑流程；M1 及后续新实验必须在退出时自动打包成功或失败证据，用户只下载一个包。现有 Day15 runner 未接入自动结果打包，不为复用本文而重复执行旧下载流程。
 
 ```text
 day15-results/
@@ -178,7 +180,7 @@ CUDA_HOME=/usr/local/cuda JOBS=2 RESULT_DIR="$PWD/day15-trace-results" \
 
 成功后应有 `experiment_exit_code=0`，`analysis.txt` 中 `functional_baseline=PASS`、`selection_evidence=PASS scope=rank0_submitted_plan`，以及九行选择表。算法或协议可以随消息大小变化，实验不预设必须 RING/SIMPLE。CSV 的 rank1 算法/协议列留空，因为这条观测点未提供其直接证据。TRACE 日志有额外开销，本次时差用于阶段观察，不与旧 INFO 结果进行性能比较。
 
-本次实验的最小必要下载清单如下，保留子目录结构；分析摘要和 CSV 可选，完整编译日志在失败排查时再取。以后新实验遵循仓库规则，将必要证据自动打成单个结果包供下载。
+Day15 当时逐文件下载的最小证据清单如下，仅记录历史流程，保留子目录结构；分析摘要和 CSV 可选，完整编译日志在失败排查时再取。以后新实验遵循仓库规则，将必要证据自动打成单个结果包供下载。
 
 ```text
 day15-trace-results/
@@ -229,7 +231,7 @@ python3 workloads/minimal_allreduce/verify_results.py results/samples/e06/day15/
 
 先把实验要求写成规则，再用程序检查，而不是读完日志后临时决定是否通过。本实验的规则是：库来源正确、同一节点的两张不同 GPU、相同 communicator、两个 rank 和作业退出 0、每次操作的数量/顺序/元素数/期望值正确，并具备本地同步返回记录。
 
-当前下载文件直接放在 `.build/day15-upload/`。从仓库根目录执行：
+Day15 首轮下载文件当时放在 `.build/day15-upload/`。从仓库根目录执行：
 
 ```bash
 python3 workloads/minimal_allreduce/verify_results.py .build/day15-upload

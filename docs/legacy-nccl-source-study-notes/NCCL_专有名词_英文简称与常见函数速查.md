@@ -1,5 +1,9 @@
 # NCCL 专有名词、英文简称与常见函数速查
 
+> 保留的历史学习资料，不定义当前任务或验收。执行范围与进度以[核心复现计划](../plans/Mycroft_26日开发路线图.md)为准；源码解释按本文标注的版本阅读，候选观测点仍需真实运行验证。
+
+旧 `../nccl/` 源码链接已改为上述历史 master commit 的上游链接，保持原源码版本；它们不是本仓库固定的 2.21.5 源码位置。
+
 本文用于解决 NCCL 学习中“名称很多，但不知道它是什么、位于哪里、和前后对象有什么关系”的问题。内容按照一次通信的执行顺序组织，可作为源码阅读时的长期速查表。
 
 ## 0. 使用范围与版本说明
@@ -1126,22 +1130,22 @@ ready -> transmitted -> done
 
 | 主题 | 本地源码位置 |
 |---|---|
-| 公共 NCCL 类型和 API | [`src/nccl.h.in`](../nccl/src/nccl.h.in) |
-| `ncclAllReduce()` 等 collective API | [`src/collectives.cc`](../nccl/src/collectives.cc) |
-| communicator 初始化、peerInfo 交换 | [`src/init.cc`](../nccl/src/init.cc) |
-| bootstrap | [`src/bootstrap.cc`](../nccl/src/bootstrap.cc) |
-| `ncclPeerInfo`、transport 函数表 | [`src/include/transport.h`](../nccl/src/include/transport.h) |
-| `ncclComm`、task、planner、plan、Channel | [`src/include/comm.h`](../nccl/src/include/comm.h) |
-| task、devWork、plan、launch | [`src/enqueue.cc`](../nccl/src/enqueue.cc) |
-| group 提交顺序 | [`src/group.cc`](../nccl/src/group.cc) |
-| `ncclDevWorkColl`、分块、kernel args | [`src/include/device.h`](../nccl/src/include/device.h) |
-| GPU kernel 主入口和模板 dispatch | [`src/device/common.h`](../nccl/src/device/common.h) |
-| Ring AllReduce | [`src/device/all_reduce.h`](../nccl/src/device/all_reduce.h) |
-| Simple primitive | [`src/device/prims_simple.h`](../nccl/src/device/prims_simple.h) |
-| Proxy 类型与进度状态 | [`src/include/proxy.h`](../nccl/src/include/proxy.h) |
-| Proxy 主体实现 | [`src/proxy.cc`](../nccl/src/proxy.cc) |
-| NET transport | [`src/transport/net.cc`](../nccl/src/transport/net.cc) |
-| NET/IB 实现 | [`src/transport/net_ib/`](../nccl/src/transport/net_ib/) |
+| 公共 NCCL 类型和 API | [`src/nccl.h.in`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/nccl.h.in) |
+| `ncclAllReduce()` 等 collective API | [`src/collectives.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/collectives.cc) |
+| communicator 初始化、peerInfo 交换 | [`src/init.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/init.cc) |
+| bootstrap | [`src/bootstrap.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/bootstrap.cc) |
+| `ncclPeerInfo`、transport 函数表 | [`src/include/transport.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/transport.h) |
+| `ncclComm`、task、planner、plan、Channel | [`src/include/comm.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/comm.h) |
+| task、devWork、plan、launch | [`src/enqueue.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc) |
+| group 提交顺序 | [`src/group.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/group.cc) |
+| `ncclDevWorkColl`、分块、kernel args | [`src/include/device.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/device.h) |
+| GPU kernel 主入口和模板 dispatch | [`src/device/common.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/device/common.h) |
+| Ring AllReduce | [`src/device/all_reduce.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/device/all_reduce.h) |
+| Simple primitive | [`src/device/prims_simple.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/device/prims_simple.h) |
+| Proxy 类型与进度状态 | [`src/include/proxy.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/proxy.h) |
+| Proxy 主体实现 | [`src/proxy.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/proxy.cc) |
+| NET transport | [`src/transport/net.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/transport/net.cc) |
+| NET/IB 实现 | [`src/transport/net_ib/`](https://github.com/NVIDIA/nccl/tree/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/transport/net_ib/) |
 
 ## 21. 官方参考
 
