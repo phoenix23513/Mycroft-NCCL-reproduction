@@ -1,6 +1,9 @@
 # NCCL 阶段 01 综合测验：从应用调用到 GPU—Proxy—网络执行
 
+> 保留的历史学习资料，不定义当前任务或验收。执行范围与进度以[核心复现计划](../plans/Mycroft_26日开发路线图.md)为准；源码解释按本文标注的版本阅读，候选观测点仍需真实运行验证。
+
 日期：2026-08-10
+
 覆盖范围：NCCL 的用途、communicator 初始化、Host 任务准备、Kernel plan、GPU 执行、Proxy 线程、Ring AllReduce 和初步异常定位
 
 ## 测验目的

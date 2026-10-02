@@ -1,5 +1,9 @@
 # NCCL Communicator 与 AllReduce Host 提交路径
 
+> 保留的历史学习资料，不定义当前任务或验收。执行范围与进度以[核心复现计划](../plans/Mycroft_26日开发路线图.md)为准；源码解释按本文标注的版本阅读，候选观测点仍需真实运行验证。
+
+旧 `../nccl/` 源码链接已改为上述历史 master commit 的上游链接，保持原源码版本；它们不是本仓库固定的 2.21.5 源码位置。
+
 本文重点整理 NCCL communicator 初始化，以及一次普通多 rank `ncclAllReduce()` 在 Host 端形成任务和 kernel plan 的过程。开头的模块依赖图同时给出 GPU、Proxy 和 Transport 的后续边界，便于把局部源码放回完整执行链理解。
 
 源码基线：本地 NCCL master，commit `5067397c2676d5aed50042fc39e5c8ee96eb0027`。不同版本的函数和字段可能变化。
@@ -257,7 +261,7 @@ typedef struct ncclComm *ncclComm_t;
 - `ncclComm_t`：`struct ncclComm *` 的类型别名。
 - `ncclComm_t comm`：communicator 指针变量。
 
-源码：[`src/nccl.h.in:36`](../nccl/src/nccl.h.in)、[`src/include/comm.h:523`](../nccl/src/include/comm.h)
+源码：[`src/nccl.h.in:36`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/nccl.h.in)、[`src/include/comm.h:523`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/comm.h)
 
 ### 3.2 跨进程关系
 
@@ -308,7 +312,7 @@ ncclResult_t ncclCommInitRank(
 | `rank` | `int` | 外部框架 | 当前本地 communicator 在组内的编号 |
 | 当前 CUDA device | CUDA 运行时状态 | 调用者预先选择 | 当前 rank 绑定的本地 GPU |
 
-源码：[`src/nccl.h.in:172`](../nccl/src/nccl.h.in)、[`src/nccl.h.in:186`](../nccl/src/nccl.h.in)、[`src/init.cc:183`](../nccl/src/init.cc)、[`src/init.cc:2562`](../nccl/src/init.cc)
+源码：[`src/nccl.h.in:172`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/nccl.h.in)、[`src/nccl.h.in:186`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/nccl.h.in)、[`src/init.cc:183`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/init.cc)、[`src/init.cc:2562`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/init.cc)
 
 ### 4.2 初始化顺序
 
@@ -360,7 +364,7 @@ ncclResult_t ncclCommInitRank(
 物理路径选择：peerInfo + topology
 ```
 
-源码：[`src/bootstrap.cc:674`](../nccl/src/bootstrap.cc)、[`src/bootstrap.cc:1194`](../nccl/src/bootstrap.cc)、[`src/init.cc:711`](../nccl/src/init.cc)、[`src/init.cc:1036`](../nccl/src/init.cc)、[`src/include/transport.h:43`](../nccl/src/include/transport.h)
+源码：[`src/bootstrap.cc:674`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/bootstrap.cc)、[`src/bootstrap.cc:1194`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/bootstrap.cc)、[`src/init.cc:711`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/init.cc)、[`src/init.cc:1036`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/init.cc)、[`src/include/transport.h:43`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/transport.h)
 
 ## 5. `struct ncclComm` 的相关结构
 
@@ -403,7 +407,7 @@ struct ncclComm
 - 固定数组：`comm->channels[MAXCHANNELS]`。
 - 指针成员：`comm->peerInfo`、`comm->topo`、`comm->bootstrap`。
 
-源码：[`src/include/comm.h:523`](../nccl/src/include/comm.h)
+源码：[`src/include/comm.h:523`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/comm.h)
 
 ## 6. AllReduce API 字段
 
@@ -435,7 +439,7 @@ ncclResult_t ncclAllReduce(
 bytes = count * ncclTypeSize(datatype);
 ```
 
-源码：[`src/nccl.h.in:496`](../nccl/src/nccl.h.in)、[`src/collectives.cc:168`](../nccl/src/collectives.cc)
+源码：[`src/nccl.h.in:496`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/nccl.h.in)、[`src/collectives.cc:168`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/collectives.cc)
 
 ## 7. 从 `ncclInfo` 到 `ncclTaskColl`
 
@@ -467,7 +471,7 @@ struct ncclInfo info;
 
 然后把 `&info` 传给 `ncclEnqueueCheck()`。该对象只在当前调用链中临时存在。
 
-源码：[`src/include/info.h:17`](../nccl/src/include/info.h)
+源码：[`src/include/info.h:17`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/info.h)
 
 ### 7.2 Host 调用链
 
@@ -486,7 +490,7 @@ collTaskAppend(...)
   -> 为普通多 rank collective 创建 ncclTaskColl
 ```
 
-源码：[`src/enqueue.cc:3124`](../nccl/src/enqueue.cc)、[`src/enqueue.cc:3014`](../nccl/src/enqueue.cc)、[`src/enqueue.cc:2690`](../nccl/src/enqueue.cc)
+源码：[`src/enqueue.cc:3124`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)、[`src/enqueue.cc:3014`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)、[`src/enqueue.cc:2690`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)
 
 ### 7.3 `ncclTaskColl`：长期任务对象
 
@@ -533,7 +537,7 @@ t->opHost = info->op;
 
 `ncclTaskColl` 也不单独保存 stream：planner 维护本批任务涉及的 stream 列表。
 
-源码：[`src/include/comm.h:193`](../nccl/src/include/comm.h)、[`src/enqueue.cc:2690`](../nccl/src/enqueue.cc)
+源码：[`src/include/comm.h:193`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/comm.h)、[`src/enqueue.cc:2690`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)
 
 ## 8. 任务内存的生命周期
 
@@ -574,7 +578,7 @@ t->opHost = info->op;
 
 因此局部指针 `t` 消失不代表任务对象消失；容器中的指针仍然连接该对象。对象回收后，同一个指针值可能被后续任务复用。
 
-源码：[`src/include/utils.h:333`](../nccl/src/include/utils.h)、[`src/include/utils.h:350`](../nccl/src/include/utils.h)、[`src/enqueue.cc:1484`](../nccl/src/enqueue.cc)
+源码：[`src/include/utils.h:333`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/utils.h)、[`src/include/utils.h:350`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/utils.h)、[`src/enqueue.cc:1484`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)
 
 ## 9. planner 与任务容器
 
@@ -614,7 +618,7 @@ comm->planner
       已生成的 kernel plan
 ```
 
-源码：[`src/include/comm.h:429`](../nccl/src/include/comm.h)
+源码：[`src/include/comm.h:429`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/comm.h)
 
 ### 9.1 task 进入 `collSorter`
 
@@ -646,7 +650,7 @@ planner->collSorter
 
 这里处理的是原来的 `ncclTaskColl` 对象。函数中的局部 `struct ncclTaskColl *task` 指针可以指向先前 `t` 指向的同一个对象。
 
-源码：[`src/enqueue.cc:363`](../nccl/src/enqueue.cc)
+源码：[`src/enqueue.cc:363`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)
 
 ## 10. task 与 plan
 
@@ -680,7 +684,7 @@ comm->planner.collTaskQueue
 
 一个 plan 可以包含多个 task；一个 task 后续可以被分配到多个 Channel。
 
-源码：[`src/enqueue.cc:576`](../nccl/src/enqueue.cc)、[`src/enqueue.cc:1568`](../nccl/src/enqueue.cc)
+源码：[`src/enqueue.cc:576`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)、[`src/enqueue.cc:1568`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)
 
 ## 11. 结构关系汇总
 
@@ -735,16 +739,16 @@ ncclMemoryPoolAlloc()
 
 | 主题 | 源码位置 |
 |---|---|
-| `ncclComm_t`、初始化和 AllReduce API | [`src/nccl.h.in`](../nccl/src/nccl.h.in) |
-| communicator 初始化 | [`src/init.cc`](../nccl/src/init.cc) |
-| bootstrap | [`src/bootstrap.cc`](../nccl/src/bootstrap.cc) |
-| `struct ncclPeerInfo` | [`src/include/transport.h`](../nccl/src/include/transport.h) |
-| `struct ncclComm`、`ncclTaskColl`、planner | [`src/include/comm.h`](../nccl/src/include/comm.h) |
-| `struct ncclInfo` | [`src/include/info.h`](../nccl/src/include/info.h) |
-| `ncclAllReduce()` | [`src/collectives.cc`](../nccl/src/collectives.cc) |
-| task 创建、准备和 plan 调度 | [`src/enqueue.cc`](../nccl/src/enqueue.cc) |
-| group 提交 | [`src/group.cc`](../nccl/src/group.cc) |
-| 内存池 | [`src/include/utils.h`](../nccl/src/include/utils.h) |
+| `ncclComm_t`、初始化和 AllReduce API | [`src/nccl.h.in`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/nccl.h.in) |
+| communicator 初始化 | [`src/init.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/init.cc) |
+| bootstrap | [`src/bootstrap.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/bootstrap.cc) |
+| `struct ncclPeerInfo` | [`src/include/transport.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/transport.h) |
+| `struct ncclComm`、`ncclTaskColl`、planner | [`src/include/comm.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/comm.h) |
+| `struct ncclInfo` | [`src/include/info.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/info.h) |
+| `ncclAllReduce()` | [`src/collectives.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/collectives.cc) |
+| task 创建、准备和 plan 调度 | [`src/enqueue.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc) |
+| group 提交 | [`src/group.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/group.cc) |
+| 内存池 | [`src/include/utils.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/utils.h) |
 
 ## 13. 官方参考
 

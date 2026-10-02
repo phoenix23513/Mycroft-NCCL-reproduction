@@ -1,5 +1,9 @@
 # 第二份任务提交：从 Host 任务到 GPU Ring AllReduce 执行
 
+> 保留的历史学习资料，不定义当前任务或验收。执行范围与进度以[核心复现计划](../plans/Mycroft_26日开发路线图.md)为准；源码解释按本文标注的版本阅读，候选观测点仍需真实运行验证。
+
+旧 `../nccl/` 源码链接已改为上述历史 master commit 的上游链接，保持原源码版本；它们不是本仓库固定的 2.21.5 源码位置。
+
 本文承接第一份任务提交《NCCL Communicator 与 AllReduce Host 提交路径》。第一份文档结束于 `ncclTaskColl` 进入 planner；本文继续追踪任务如何变成 GPU 可以读取的工作描述、如何被 `ncclKernelPlan` 组织并提交到 CUDA stream，以及 Ring AllReduce 在 GPU 上怎样完成 ReduceScatter 和 AllGather。
 
 本阶段同时补充了《面向 NCCL 源码阅读的 C++ 补充计划》的前两个阶段：C++ 基础语法和底层源码常用机制。本文不把这些语法单独罗列，而是放到对应的 NCCL 源码位置解释。
@@ -172,7 +176,7 @@ workNode 指针
 
 局部变量 `devWork` 在函数迭代结束后可以消失，因为它的内容已经复制到了 `workNode` 后面的内存。
 
-源码：[`src/enqueue.cc`](../nccl/src/enqueue.cc)、[`src/include/device.h`](../nccl/src/include/device.h)
+源码：[`src/enqueue.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)、[`src/include/device.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/device.h)
 
 ## 4. task 与 devWork 为什么同时存在
 
@@ -303,7 +307,7 @@ struct ncclKernelPlan
 \-- kernelArgs
 ```
 
-源码：[`src/enqueue.cc`](../nccl/src/enqueue.cc)、[`src/include/comm.h`](../nccl/src/include/comm.h)
+源码：[`src/enqueue.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)、[`src/include/comm.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/comm.h)
 
 ## 7. `finishPlan()` 与 kernel 参数
 
@@ -330,7 +334,7 @@ work 有三种存储方式：
 
 `uploadWork()` 根据上述类型，把 `plan->workQueue` 中的 work 数据复制到 GPU kernel 能读取的位置。这里的“upload”不能简单理解为每次都执行一次普通 Host-to-Device memcpy：Args、映射 FIFO 和 Persistent 路径的处理方式不同。
 
-源码：[`src/enqueue.cc`](../nccl/src/enqueue.cc)、[`src/include/device.h`](../nccl/src/include/device.h)
+源码：[`src/enqueue.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)、[`src/include/device.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/device.h)
 
 ## 8. `ncclLaunchKernel()` 如何启动 GPU 工作
 
@@ -364,7 +368,7 @@ cudaStream_t launchStream = planner->streams->stream;
 
 根据 NCCL 2.21.5 官方文档，collective API 与传入的 CUDA stream 关联；Host API 返回后，GPU 仍可继续异步执行。`ncclLaunchKernel()` 被调用也不能证明 Ring 或网络传输已经完成。
 
-源码：[`src/group.cc`](../nccl/src/group.cc)、[`src/enqueue.cc`](../nccl/src/enqueue.cc)
+源码：[`src/group.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/group.cc)、[`src/enqueue.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc)
 
 ## 9. GPU kernel 如何找到本 Channel 的工作
 
@@ -413,7 +417,7 @@ RunWorkColl<Fn, T, RedOp, Algo, Proto>().run(...);
 runRing<T, RedOp, Proto>(tid, nthreads, work);
 ```
 
-源码：[`src/device/common.h`](../nccl/src/device/common.h)、[`src/device/all_reduce.h`](../nccl/src/device/all_reduce.h)
+源码：[`src/device/common.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/device/common.h)、[`src/device/all_reduce.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/device/all_reduce.h)
 
 ## 10. Channel 是什么
 
@@ -749,18 +753,18 @@ GPU kernel
 
 | 主题 | 源码位置 |
 |---|---|
-| group 中任务准备和 launch 顺序 | [`src/group.cc`](../nccl/src/group.cc) |
-| task 转 devWork、plan 调度、work 上传和 kernel launch | [`src/enqueue.cc`](../nccl/src/enqueue.cc) |
-| `ncclKernelPlan`、planner 和 Host 队列 | [`src/include/comm.h`](../nccl/src/include/comm.h) |
-| `ncclDevWorkColl`、`ncclDevKernelArgs` 和分块计算 | [`src/include/device.h`](../nccl/src/include/device.h) |
-| GPU kernel 主入口和模板 dispatch | [`src/device/common.h`](../nccl/src/device/common.h) |
-| Ring AllReduce 和五类 primitive 调用 | [`src/device/all_reduce.h`](../nccl/src/device/all_reduce.h) |
-| Simple protocol primitive 实现 | [`src/device/prims_simple.h`](../nccl/src/device/prims_simple.h) |
-| Host launch 函数声明 | [`src/include/enqueue.h`](../nccl/src/include/enqueue.h) |
+| group 中任务准备和 launch 顺序 | [`src/group.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/group.cc) |
+| task 转 devWork、plan 调度、work 上传和 kernel launch | [`src/enqueue.cc`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/enqueue.cc) |
+| `ncclKernelPlan`、planner 和 Host 队列 | [`src/include/comm.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/comm.h) |
+| `ncclDevWorkColl`、`ncclDevKernelArgs` 和分块计算 | [`src/include/device.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/device.h) |
+| GPU kernel 主入口和模板 dispatch | [`src/device/common.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/device/common.h) |
+| Ring AllReduce 和五类 primitive 调用 | [`src/device/all_reduce.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/device/all_reduce.h) |
+| Simple protocol primitive 实现 | [`src/device/prims_simple.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/device/prims_simple.h) |
+| Host launch 函数声明 | [`src/include/enqueue.h`](https://github.com/NVIDIA/nccl/blob/5067397c2676d5aed50042fc39e5c8ee96eb0027/src/include/enqueue.h) |
 
 ## 19. 参考资料
 
 - [NCCL 2.21.5 Collective Operations](https://docs.nvidia.com/deeplearning/nccl/archives/nccl_2215/user-guide/docs/usage/collectives.html)
 - [NCCL 2.21.5 CUDA Stream Semantics](https://docs.nvidia.com/deeplearning/nccl/archives/nccl_2215/user-guide/docs/usage/streams.html)
 - [NCCL Documentation](https://docs.nvidia.com/deeplearning/nccl/)
-- C++ 补充材料：`/mnt/d/CSlessons/NCCL/nccl_cpp_supplement_plan.md`
+- C++ 补充材料：外部学习资料（未纳入本仓库）

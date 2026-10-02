@@ -1,0 +1,48 @@
+status=BUILDING
+source_tag=v2.21.5-1
+source_commit=ab2b89c4c339bd7f816fbc114a4b05d386b66290
+source_clean=yes
+cuda_home=/usr/local/cuda-12.5
+build_dir=<POD_TMP>/source/day15-trace/.build/nccl
+jobs=2
+trace=1
+NVCC_GENCODE=-gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70
+os:
+PRETTY_NAME="Ubuntu 22.04.4 LTS"
+NAME="Ubuntu"
+VERSION_ID="22.04"
+VERSION="22.04.4 LTS (Jammy Jellyfish)"
+VERSION_CODENAME=jammy
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=jammy
+kernel:
+Linux 5.15.0-187-generic
+compiler:
+g++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0
+Copyright (C) 2021 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+cuda:
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2024 NVIDIA Corporation
+Built on Thu_Jun__6_02:18:23_PDT_2024
+Cuda compilation tools, release 12.5, V12.5.82
+Build cuda_12.5.r12.5/compiler.34385749_0
+make:
+GNU Make 4.3
+Built for x86_64-pc-linux-gnu
+Copyright (C) 1988-2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+python:
+Python 3.11.11
+command: make -C <POD_TMP>/source/day15-trace/third_party/nccl/src -j 2 lib BUILDDIR=<POD_TMP>/source/day15-trace/.build/nccl CUDA_HOME=/usr/local/cuda-12.5 CUDA_INC=/usr/local/cuda-12.5/include CUDA_LIB=/usr/local/cuda-12.5/lib64 CXX=g++ NVCC_GENCODE=-gencode=arch=compute_70\,code=sm_70\ -gencode=arch=compute_70\,code=compute_70 DEBUG=0 TRACE=1 ASAN=0 GCOV=0 KEEP=0 VERBOSE=1 NVTX=1 PROFAPI=1 RDMA_CORE=0 CUDARTLIB=cudart_static ONLY_FUNCS=
+ambient make/compiler flags cleared: MAKEFLAGS MAKEOVERRIDES MFLAGS CXXFLAGS NVCUFLAGS LDFLAGS NVCC_PREPEND_FLAGS NVCC_APPEND_FLAGS
+status=PASS

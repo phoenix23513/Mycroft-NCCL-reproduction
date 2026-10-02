@@ -4,17 +4,17 @@
 
 本项目关注一个实际问题：当分布式训练中的某个 rank、GPU、Proxy 或网络环节变慢时，许多其他 rank 也会因为依赖关系表现为停滞。我们希望通过记录底层通信进度和恢复事件因果关系，区分最早的异常来源与随后被阻塞的受影响 rank。
 
-项目已用 E01/E02 建立确定性回归夹具，并用 E03 建立版本化事件契约。从 Day 14 起不再先扩展离线模型：先构建并运行真实 NCCL 2.21.5，动态确认 completion/state 字段，再用真实轨迹建设共享内存通道和分析器，最终在 Crater 集群验证。
+项目已用 E01/E02 建立确定性回归夹具，并用 E03 建立版本化事件契约。当前路线只执行核心方法复现必需步骤：确认真实 NET/RDMA 路径，采集可信 completion/state log，注入可重复软件延迟，再用真实轨迹验证 Trigger 与 RCA。分析先离线执行，共享内存和独立 reader 移出当前范围。
 
 ## 当前进度
 
 - **E01 已完成**：4-rank、8-chunk Ring ReduceScatter/AllGather、JSONL 事件、单点延迟注入和因果传播。
 - **E02 已完成**：发送侧归一化分析 fixture、三类合成停滞和论文四类快照状态分类均已通过验收；它不作为真实 NCCL 执行或插桩正确性的证据。
-- **E03 已完成并完成契约纠错**：Event v1 保持可读，Event v2 补充真实单调时间与 operation completion；NCCL 2.21.5 字段目前仍是候选，Day 16—17 将用真实运行动态确认。
-- **下一步是 Day 14**：构建并加载项目自己的 NCCL 2.21.5；尚未开始 Day 14 实验。
+- **E03 已完成并完成契约纠错**：Event v1 保持可读，Event v2 补充真实单调时间与 operation completion；NCCL 2.21.5 字段仍待目标路径动态验证。
+- **真实基线已完成**：项目 NCCL 的构建/加载及原生双 GPU AllReduce 已验证；当前实际路径是同机 P2P/CUMEM。执行入口与证据见 [`instrumentation/nccl-2.21.5/README.md`](instrumentation/nccl-2.21.5/README.md)。
 - Crater 上已经完成 CPU/Gloo 双进程 AllReduce 与单 GPU PyTorch/CUDA 环境验证。
 
-详细任务与每日进度见 [`docs/plans/Mycroft_26日开发路线图.md`](docs/plans/Mycroft_26日开发路线图.md)。
+详细任务与里程碑进度见 [`docs/plans/Mycroft_26日开发路线图.md`](docs/plans/Mycroft_26日开发路线图.md)。
 
 ## 已完成的历史回归演示
 
@@ -66,20 +66,19 @@ ctest --test-dir .build --output-on-failure
 | E02 | 如何用统一累计量构造确定性的分析输入 | 发送侧归一化进度 fixture |
 | E03 | 如何跨 communicator、operation 和 channel 唯一识别事件 | 兼容 Event v1 的 Event v2 与 NCCL 源码字段映射 |
 | E04 | 如何分析真实 NCCL 轨迹中的停滞和根因候选 | Trigger、MinOp/MinData 和 RCA |
-| E05 | 如何低开销传递真实 NCCL 运行时事件 | 共享内存循环缓冲区与 reader |
+| E05（后续扩展） | 如何持续低开销传递真实 NCCL 运行时事件 | 共享内存循环缓冲区与 reader；本轮不实现 |
 | E06 | 真实 NCCL 能否产生可分析事件并复现确定性异常 | NCCL 2.21.5 构建、插桩与双节点验证 |
 
-阶段编号表示能力边界，不再表示“先分析、后接入”的执行顺序。当前顺序是：E06 真实 NCCL 构建与 tracepoint → E05 共享内存与 reader → E04 基于真实轨迹的 Trigger/RCA → 双节点 Socket/RDMA。E01/E02 只保留为单元回归，不能作为 Day 14 之后的实验验收证据。
+阶段编号表示能力边界。剩余工作是 M1 目标 NET/RDMA 路径 → M2 最小真实日志 → M3 软件延迟对照 → M4 Trigger/RCA → M5 双节点 RDMA 端到端验收。E01/E02 只保留为单元回归。Graph、多协议、完整 P2P GPU 采集与 E05 不作为本轮门槛；最终只标记核心方法复现已验证，不声称完整实时系统已完成。
 
 ## 仓库中有什么
 
 - [`experiments/`](experiments/)：E01、E02 确定性回归夹具；
-- [`docs/plans/`](docs/plans/)：当前 26 日开发路线及其变更记录；
-- [`notes/nccl/`](notes/nccl/)：与实现相关的 NCCL 源码学习笔记；
+- [`docs/plans/`](docs/plans/)：五个必做里程碑、历史任务及变更记录；
+- [`docs/legacy-nccl-source-study-notes/`](docs/legacy-nccl-source-study-notes/)：保留的历史源码学习资料，先核对版本，不作为当前执行计划；
 - [`cluster/crater/`](cluster/crater/)：Crater 探针、作业配置和平台实验资料；
-- [`src/mycroft/`](src/mycroft/)：后续统一事件和分析代码；
-- [`runtime/`](runtime/)：后续共享内存事件通道；
-- [`instrumentation/`](instrumentation/)：后续 NCCL 2.21.5 插桩记录；
+- [`src/mycroft/`](src/mycroft/)：已实现的事件契约与轨迹恢复代码，分析器待实现；
+- [`instrumentation/`](instrumentation/)：固定 NCCL 构建、候选插桩点和未实现的采集接口；
 - [`results/samples/`](results/samples/)：可公开、可复查的小型结果样例。
 
 ## 复现范围
@@ -88,9 +87,9 @@ ctest --test-dir .build --output-on-failure
 
 ## English summary
 
-This repository independently reproduces the core path of Mycroft-style NCCL stall diagnosis. The remaining work now starts from project-built NCCL 2.21.5, validates real completion and state traces, and only then builds the shared-memory and analysis path.
+This repository independently reproduces the core method of Mycroft-style NCCL stall diagnosis. Five remaining milestones cover the actual NET/RDMA path, validated completion and state traces, controlled software delay, Trigger/RCA, and end-to-end validation. Analysis initially runs offline; shared-memory transport and an independent reader are outside the current scope.
 
-E01 provides a deterministic Ring AllReduce simulator, JSONL traces, and causal delay propagation. E02 provides a deterministic normalized send-side fixture for analysis tests, not an execution model of NCCL. E03 keeps Event v1 readable while Event v2 adds process-local monotonic time and operation-completion records. Starting with Day 14, every experimental acceptance must use the project-built NCCL 2.21.5: build and tracepoint validation now precede the shared-memory transport and E04 analysis. E01 and E02 remain deterministic unit-test fixtures only. See the [26-day development roadmap](docs/plans/Mycroft_26日开发路线图.md) for the current plan.
+E01 provides a deterministic Ring AllReduce simulator and E02 supplies normalized send-side fixtures for analysis tests. E03 keeps Event v1 readable while Event v2 adds process-local monotonic time and operation-completion records. Experimental acceptance requires actual execution of the project-built NCCL 2.21.5; E01/E02 and handwritten events cannot replace that evidence. See the [core reproduction plan](docs/plans/Mycroft_26日开发路线图.md) for scope and completion criteria.
 
 ## License
 

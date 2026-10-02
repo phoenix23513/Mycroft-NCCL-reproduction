@@ -1,0 +1,23 @@
+functional_baseline=PASS
+ranks=2 operations_per_rank=9 result_checks=18
+transport_connections=P2P/CUMEM
+selection_evidence=PASS scope=rank0_submitted_plan
+operation,bytes,algorithm,protocol,channels,selection_path
+0,16,RING,LL,1,CBDColl
+1,16,RING,LL,1,CBDColl
+2,16,RING,LL,1,CBDColl
+3,16384,RING,LL,2,CBDColl
+4,16384,RING,LL,2,CBDColl
+5,16384,RING,LL,2,CBDColl
+6,4194304,RING,SIMPLE,4,CBDColl
+7,4194304,RING,SIMPLE,4,CBDColl
+8,4194304,RING,SIMPLE,4,CBDColl
+rank,count,operations,median_api_us,median_sync_wait_us
+0,4,3,52.142,76.709
+0,4096,3,42.985,31.087
+0,1048576,3,69.415,646.692
+1,4,3,58.190,36.192
+1,4096,3,48.283,31.304
+1,1048576,3,65.322,173.435
+timing_scope=CPU_observed_local_stream_stages; not_GPU_kernel_duration
+full_day15_acceptance=PENDING_USER_REVIEW

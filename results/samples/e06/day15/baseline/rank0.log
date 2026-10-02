@@ -1,0 +1,60 @@
+requested_library=<NCCL_ROOT>/lib/libnccl.so.2.21.5
+loaded_library=<NCCL_ROOT>/lib/libnccl.so.2.21.5
+nccl_version_code=22105
+rank=0 device=0 gpu_name=Tesla V100-SXM2-32GB
+rank=0 operation=-1 count=0 stage=bootstrap_begin time_ns=354682685056438
+rank=0 operation=-1 count=0 stage=bootstrap_return time_ns=354682720517979
+rank=0 operation=-1 count=0 stage=comm_init_begin time_ns=354682720547416
+<HOST>:<PID>:<TID> [0] NCCL INFO comm <PTR_0> rank 0 nRanks 2 nNodes 1 localRanks 2 localRank 0 MNNVL 0
+<HOST>:<PID>:<TID> [0] NCCL INFO Channel 00/0 : 0[0] -> 1[1] via P2P/CUMEM
+<HOST>:<PID>:<TID> [0] NCCL INFO Channel 01/0 : 0[0] -> 1[1] via P2P/CUMEM
+<HOST>:<PID>:<TID> [0] NCCL INFO Channel 02/0 : 0[0] -> 1[1] via P2P/CUMEM
+<HOST>:<PID>:<TID> [0] NCCL INFO Channel 03/0 : 0[0] -> 1[1] via P2P/CUMEM
+<HOST>:<PID>:<TID> [0] NCCL INFO ncclCommInitRank comm <PTR_0> rank 0 nranks 2 cudaDev 0 nvmlDev 0 busId 1a000 commId <COMM_ID> - Init COMPLETE
+rank=0 operation=-1 count=0 stage=comm_init_return time_ns=354683199470836
+rank=0 operation=0 count=4 stage=api_begin time_ns=354683200217261
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 0 sendbuff <PTR_2> recvbuff <PTR_3> count 4 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=0 count=4 stage=api_return time_ns=354683203627047
+rank=0 operation=0 count=4 stage=stream_sync_return time_ns=354683203667840
+rank=0 operation=0 count=4 expected=3 result=PASS
+rank=0 operation=1 count=4 stage=api_begin time_ns=354683203788866
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 1 sendbuff <PTR_2> recvbuff <PTR_3> count 4 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=1 count=4 stage=api_return time_ns=354683203839882
+rank=0 operation=1 count=4 stage=stream_sync_return time_ns=354683203869701
+rank=0 operation=1 count=4 expected=5 result=PASS
+rank=0 operation=2 count=4 stage=api_begin time_ns=354683203941025
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 2 sendbuff <PTR_2> recvbuff <PTR_3> count 4 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=2 count=4 stage=api_return time_ns=354683203982931
+rank=0 operation=2 count=4 stage=stream_sync_return time_ns=354683204026785
+rank=0 operation=2 count=4 expected=7 result=PASS
+rank=0 operation=3 count=4096 stage=api_begin time_ns=354683204662390
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 3 sendbuff <PTR_2> recvbuff <PTR_5> count 4096 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=3 count=4096 stage=api_return time_ns=354683204717786
+rank=0 operation=3 count=4096 stage=stream_sync_return time_ns=354683204758654
+rank=0 operation=3 count=4096 expected=9 result=PASS
+rank=0 operation=4 count=4096 stage=api_begin time_ns=354683204853509
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 4 sendbuff <PTR_2> recvbuff <PTR_5> count 4096 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=4 count=4096 stage=api_return time_ns=354683204896208
+rank=0 operation=4 count=4096 stage=stream_sync_return time_ns=354683204934542
+rank=0 operation=4 count=4096 expected=11 result=PASS
+rank=0 operation=5 count=4096 stage=api_begin time_ns=354683205024355
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 5 sendbuff <PTR_2> recvbuff <PTR_5> count 4096 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=5 count=4096 stage=api_return time_ns=354683205066486
+rank=0 operation=5 count=4096 stage=stream_sync_return time_ns=354683205096077
+rank=0 operation=5 count=4096 expected=13 result=PASS
+rank=0 operation=6 count=1048576 stage=api_begin time_ns=354683213881957
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 6 sendbuff <PTR_6> recvbuff <PTR_7> count 1048576 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=6 count=1048576 stage=api_return time_ns=354683213951206
+rank=0 operation=6 count=1048576 stage=stream_sync_return time_ns=354683214133346
+rank=0 operation=6 count=1048576 expected=15 result=PASS
+rank=0 operation=7 count=1048576 stage=api_begin time_ns=354683218300005
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 7 sendbuff <PTR_6> recvbuff <PTR_7> count 1048576 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=7 count=1048576 stage=api_return time_ns=354683218361146
+rank=0 operation=7 count=1048576 stage=stream_sync_return time_ns=354683218539688
+rank=0 operation=7 count=1048576 expected=17 result=PASS
+rank=0 operation=8 count=1048576 stage=api_begin time_ns=354683222613533
+<HOST>:<PID>:<TID> [0] NCCL INFO AllReduce: opCount 8 sendbuff <PTR_6> recvbuff <PTR_7> count 1048576 datatype 7 op 0 root 0 comm <PTR_0> [nranks=2] stream <PTR_4>
+rank=0 operation=8 count=1048576 stage=api_return time_ns=354683222669696
+rank=0 operation=8 count=1048576 stage=stream_sync_return time_ns=354683222851706
+rank=0 operation=8 count=1048576 expected=19 result=PASS
+rank=0 operations=9 status=PASS

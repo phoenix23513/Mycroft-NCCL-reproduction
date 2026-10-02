@@ -2,10 +2,12 @@
 
 本文把 Mycroft 论文中的观测字段、项目版本化 Event 契约和固定版本 NCCL 源码连接起来。源码基线是官方 tag `v2.21.5-1`，commit `ab2b89c4c339bd7f816fbc114a4b05d386b66290`。
 
+当前执行范围按 [v0.5 计划](../plans/Mycroft_26日开发路线图.md) 限定普通串行 RING/SIMPLE NET/IB；在 M2 动态确认字段。Graph、完整 P2P、多 communicator 与 E05 共享内存扩展不作为本轮前置任务。
+
 状态含义：
 
 - **已确认**：字段或状态转换能从固定版本源码直接证明；
-- **候选**：源码位置明确，但仍需 Day 16—20 的真实 NCCL 动态实验确认跨 rank 一致性或运行时语义；
+- **候选**：源码位置明确，但仍需 M2—M3 的真实 NCCL 动态实验确认跨 rank 一致性或运行时语义；
 - **未映射**：论文没有给出足够定义，不能靠同名字段猜测。
 
 ## 三种身份不要混在一起
@@ -29,7 +31,7 @@
 | `rank` | `comm->rank`，`src/include/comm.h:246`；`src/init.cc:318` 赋值 | communicator 初始化至销毁 | 只在对应 communicator 内唯一 | **已确认**：必须与 `communicator_id` 组合 |
 | `Channel_id` / `channel` | `channel->id` 在 `src/channel.cc:18` 赋值；`proxyOp->channelId` 在 `src/enqueue.cc:1806` 赋值 | communicator channel 初始化后存在，调度时复制进 Proxy op | 数字只在 communicator 内有意义；同一 channel 可承载很多 operation | **已确认**：Event 中必须和 communicator、operation、rank 组合 |
 | `QP_id` | `src/transport/net_ib.cc:636` 的 `ncclIbQpInfo.qpn`；本地 QPN 在 `:1022` / `:1335` 从 `ibv_qp::qp_num` 取得 | IB/RoCE 连接建连时创建，QP 销毁后失效 | 一个连接可以有多个 QP；QPN 不是永久全局 ID | **候选，IB-specific**：至少需要连接方向、net device、peer、channel、QP index 和 local QPN，不能只留一个整数 |
-| `op_seq` | collective Proxy op 在 `src/enqueue.cc:331` 获得 plan-local `opCount`；`:1100-1146` 用 `sharedRes->collOpCount` 转成历史序号；Proxy 侧保存在 `ncclProxyArgs.opCount` | collective 被调度并上传 Proxy op 时产生；persistent plan 每次上传都会推进历史计数 | collective 合法调用顺序一致时应跨 rank 对齐；无 Proxy 的路径、communicator split/share 和 graph replay 仍需实测 | **强候选**：collective 使用 `proxyOp->opCount >> 1`，并与 `commHash` 组合；Day 16 必须用真实运行动态验证 |
+| `op_seq` | `src/enqueue.cc:331` 的 tuned 调度或 `:438` 的 CBDColl 调度取得 plan-local `opCount`；`:1100-1146` 用 `sharedRes->collOpCount` 转成历史序号；Proxy 侧保存在 `ncclProxyArgs.opCount` | 目标普通 NET 路径中 collective 被调度并上传 Proxy op 时关联 | 只在已验证的合法执行顺序内跨 rank 对账；不外推到 Graph、split/share 或无 Proxy 路径 | **强候选**：collective 使用 `proxyOp->opCount >> 1`，并与 `commHash` 组合；M2 必须用真实运行动态验证 |
 | `msg_size` | API `count`/`datatype` 在 `ncclInfo`；`src/include/info.h:78` 计算 `nBytes`/`workBytes`；`src/enqueue.cc:1793` 计算 `proxyOp->nbytes` | API 入队后得到逻辑字节数，调度后得到每次 Proxy 传输粒度 | 相同 collective 的逻辑大小应跨 rank 一致；每 channel/slice 大小不一定相同 | **已确认有多个层级**：若记录 operation 大小用 `ncclInfo.nBytes`，若记录网络请求大小用 `proxyOp.nbytes`，字段名必须区分 |
 
 ## `op_seq` 为什么只能叫强候选
@@ -48,7 +50,7 @@ ncclProxyArgs.opCount
 
 最低位是 collective/P2P 标签，所以 collective 的分析序号候选是 `opCount >> 1`。它比 `comm->opCount` 更合适：后者在 `src/proxy.cc:903-914` 每次 Proxy launch 增加一次，一次 launch 可能包含多个任务。
 
-仍需 Day 16 用两个真实 rank、连续多个 AllReduce、CUDA Graph replay 各跑一次，验证 `(commHash, opCount >> 1)` 在目标工作负载中是否一一对应同一 CollOp。验证前不能把它写成无条件事实。
+仍需 M2 用两个真实 rank、普通连续多个 AllReduce，验证 `(commHash, opCount >> 1)` 在目标 NET 工作负载中是否一一对应同一 CollOp。验证前不能把它写成无条件事实。Graph replay、split/share 和完整 P2P 不在本轮支持范围，不安排对应实验。
 
 ## `msg_size` 必须先说明层级
 
@@ -68,8 +70,8 @@ Day 08—10 的 E02 是发送侧抽象，不是对 `ncclProxySubArgs` 的逐字�
 |---|---|---|---|
 | `total_chunks` | `sub->nsteps / args->sliceSteps` | `nsteps` 是协议 step 数，不保证等于论文实现所称 chunk；需要统一采样单位 | 候选 |
 | `gpu_ready` | GPU 更新 connection FIFO size/tail 后，`sendProxyProgress()` 的 readiness 条件成立 | `src/device/prims_simple.h:139,181` 写 size/tail；`src/transport/net.cc:1084-1118` 检查 SIMPLE/LL/LL128 readiness。没有一个现成的 `gpu_ready` 累计字段 | 候选，必须插桩派生 |
-| `rdma_transmitted` | `sub->transmitted` | `isend()` 返回非空 request 后在 `src/transport/net.cc:1121-1124` 推进 | 源码语义已确认；归一化为 E02 counter 仍待 Day 17 的真实 state log 验证 |
-| `rdma_done` | `sub->done` | `ncclNet->test()` 报告完成后在 `src/transport/net.cc:1137-1154` 推进 | 源码语义已确认；归一化映射待 Day 17 的真实 state log 验证，且不能解释成远端 GPU 已消费 |
+| `rdma_transmitted` | `sub->transmitted` | `isend()` 返回非空 request 后在 `src/transport/net.cc:1121-1124` 推进 | 源码语义已确认；归一化仍待 M2 的真实 NET/IB state log 验证；Socket 路径不赋予 RDMA 含义 |
+| `rdma_done` | `sub->done` | `ncclNet->test()` 报告完成后在 `src/transport/net.cc:1137-1154` 推进 | 源码语义已确认；归一化待 M2 验证，且不能解释成远端 GPU 已消费 |
 
 `sub->posted` 不是 `gpu_ready`：它表示 Proxy 已把 buffer/credit 提供给 GPU，发生在 GPU 数据真正 ready 之前。
 
@@ -91,7 +93,7 @@ Day 13 冻结的 Event v1 继续可读，其内容是分析器的公共身份和
 
 进程单调时钟不是跨主机同步时钟。原始纳秒值只能在同一 rank 的恢复时间线内直接排序；跨 rank 分析应先计算各自的持续时间、吞吐或间隔，再比较这些派生指标。不能用不同主机的原始 monotonic 值建立全局先后关系。
 
-`IP`、`Gid`、`GPU_id` 和 `QP_id` 仍属于采集元数据，不强塞进每一种 Event payload。Day 16—19 的真实采集链可用它们建立 rank/channel/connection 元数据表。completion 的真实聚合插桩点同样要在 Day 16 的真实运行中动态确认，当前契约只规定分析输入语义，不宣称采集实现已经完成。
+`IP`、`Gid`、`GPU_id` 和 `QP_id` 仍属于采集元数据，不强塞进每一种 Event payload。M2 只采建立 rank/channel/peer/connection 关联所需的元数据，不为未定义论文字段猜测含义。completion 的真实观测也要动态确认，当前契约只规定分析输入语义，不宣称采集实现已经完成。
 
 ## 论文与本项目的边界
 

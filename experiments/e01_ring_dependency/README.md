@@ -2,6 +2,8 @@
 
 Day 05 实现 ReduceScatter；Day 06 在同一个 4-rank、8-chunk、单 channel 模型上补全 AllGather 和 JSONL 事件。这里不调用 GPU、NCCL、线程或网络。
 
+当前用于确定性回归，Day05—07 的函数均已实现；下文保留学习过程，不是待办任务。剩余真实运行与分析验收按[当前计划](../../docs/plans/Mycroft_26日开发路线图.md)执行，无需在 Crater 重跑 E01。
+
 交互式过程可直接用浏览器打开 `visualizer.html`。它用移动的 chunk 方块完整展示 ReduceScatter 与 AllGather，仍是固定模拟的离线教学视图，不代表真实 NCCL/GPU 时间线。
 
 ## 与论文和真实 NCCL 的边界
@@ -13,7 +15,7 @@ E01 是用于验证 Ring 数据流和依赖传播规则的确定性测试模型�
 - Day 07 把同一 rank 的相邻事件全部串成顺序依赖，这是便于观察传播的保守简化，可能跨越不同 chunk/lane，不能外推为真实 NCCL 的精确因果图；
 - 延迟实验能证明一个主动注入事件如何在本模型定义的依赖图中产生 `affected` 后继，但不单独证明真实环境中的最慢 rank、硬件故障位置或性能开销。
 
-这些限制不影响 E01 对固定 Ring 调度、规约结果、消息配对和模型内依赖传播的验证。真实事件身份、时间窗口、组件进度和根因分析分别留给 E02—E06。
+这些限制不影响 E01 对固定 Ring 调度、规约结果、消息配对和模型内依赖传播的验证。真实事件身份、时间窗口、组件进度和根因分析由当前计划的 M2—M4 验证；E01/E02 只提供单元回归夹具。
 
 ## 固定输入与结果
 
@@ -62,9 +64,9 @@ recv_chunk  = chunk_base + (rank - step - 2 + RING_RANKS) mod RING_RANKS
   -> completed_steps 增加 1
 ```
 
-## 用户实现范围
+## Day05 历史实现范围
 
-在 `src/ring_sim.c` 中依次完成：
+当时在 `src/ring_sim.c` 中依次实现了：
 
 1. `ring_next_rank` 和 `ring_prev_rank`；
 2. `ring_send_chunk` 和 `ring_recv_chunk`；
@@ -84,7 +86,7 @@ cmake --build .build --target e01_ring_sim test_e01_reduce_scatter
 ctest --test-dir .build -R e01_reduce_scatter --output-on-failure
 ```
 
-骨架刚建立时，测试应因 `RING_ERROR_NOT_IMPLEMENTED` 失败。实现完成后的程序位于：
+骨架刚建立时，测试曾因 `RING_ERROR_NOT_IMPLEMENTED` 失败；现有实现的测试应通过。程序位于：
 
 ```bash
 ./.build/experiments/e01_ring_dependency/e01_ring_sim
@@ -108,7 +110,7 @@ ctest --test-dir .build-asan -R e01_reduce_scatter --output-on-failure
 
 ## Day 06 实现与验证
 
-在 `src/ring_sim.c` 中完成以下四个 TODO：
+当时在 `src/ring_sim.c` 中实现了以下四个接口，现已无这些 TODO：
 
 1. `ring_all_gather_send_chunk`；
 2. `ring_all_gather_recv_chunk`；
@@ -126,7 +128,7 @@ timestamp, value, contributor_mask
 
 `timestamp` 是从 0 开始递增的逻辑时间，不是系统时钟。
 
-构建后先观察预期失败：
+以下命令现在应通过：
 
 ```bash
 cmake -S . -B .build
@@ -134,7 +136,7 @@ cmake --build .build
 ctest --test-dir .build -R 'e01_all_gather|e01_trace_jsonl' --output-on-failure
 ```
 
-完成 TODO 后运行：
+运行已完成的程序：
 
 ```bash
 ./.build/experiments/e01_ring_dependency/e01_ring_sim
@@ -151,11 +153,11 @@ ctest --test-dir .build -R 'e01_all_gather|e01_trace_jsonl' --output-on-failure
 - 96 条 JSONL 事件可独立解析，缺失或交换必要事件会被拒绝；
 - 普通测试、全仓库回归、AddressSanitizer 和浏览器动画验收通过。
 
-## Day 07 任务：单点延迟与因果传播
+## Day07 已完成：单点延迟与因果传播
 
 Day 07 不改变 Ring 数值计算，只在已经生成的 96 条事件上建立因果关系。框架文件是 include/delay.h、src/delay.c 和 tests/test_delay_propagation.c。
 
-你需要完成三个接口：
+已实现三个接口：
 
 1. delay_find_message_predecessor：为 recv 找到同一次传输的 send；
 2. delay_find_rank_predecessor：找到同一 rank 上离当前事件最近的前一个事件；
@@ -163,7 +165,7 @@ Day 07 不改变 Ring 数值计算，只在已经生成的 96 条事件上建立
 
 固定根事件是 ReduceScatter 的 step=0, rank=1, chunk=0, send，主动延迟 100 个逻辑时间单位。只有它应标记为 injected_root；后继事件只能标记为 affected，不能再次主动加 100。
 
-先观察预期失败：
+回归测试命令（应通过）：
 
 ~~~bash
 cmake -S . -B .build

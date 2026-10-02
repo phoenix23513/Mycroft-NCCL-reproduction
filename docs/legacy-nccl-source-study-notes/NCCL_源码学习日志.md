@@ -1,14 +1,16 @@
 # NCCL 源码学习进展
 
-最后更新：2026-08-04
+> 保留的历史学习资料，不定义当前任务或验收。执行范围与进度以[核心复现计划](../plans/Mycroft_26日开发路线图.md)为准；源码解释按本文标注的版本阅读，候选观测点仍需真实运行验证。
 
-## 项目目标
+原始记录日期：2026-08-04（以下状态只反映当时的外部学习工作区）
+
+## 当时的学习目标
 
 围绕 Mycroft 复现需求学习 NCCL：理解集合通信的执行过程，定位 Host、GPU 与网络侧观测点，构造性能异常，并依据事件依赖和运行状态定位根因。
 
 目标版本为 NCCL 2.21.5。当前先使用本地 master 熟悉主干结构，正式插桩前再迁移到 2.21.5。
 
-## 当前进度
+## 当时的学习进度
 
 已完成 communicator 初始化、AllReduce Host 任务创建、任务准备、kernel plan 生成、work 上传和 GPU kernel 提交主线；当前到达 Ring AllReduce 的 `runRing()` 入口，尚未深入 device primitive、Proxy 和 RDMA。
 
@@ -79,7 +81,7 @@ ncclAllReduce()
 - group 用于多 GPU 提交、collective 聚合和 P2P 合并；
 - NCCL Host 调用返回不等于 GPU collective 已完成。
 
-## 待完成内容
+## 当时记录的未完成内容（非当前待办）
 
 | 内容 | 状态 |
 |---|---|
@@ -93,9 +95,9 @@ ncclAllReduce()
 | NCCL 2.21.5 tracepoint 实现 | 未开始 |
 | 多 rank、跨节点故障验证 | 未开始 |
 
-## 环境与阻塞
+## 当时的环境与阻塞
 
-- 本地源码：`<NCCL_SOURCE_DIR>`
+- 本地源码：外部旧学习工作区中的 `nccl/`（未纳入本仓库）
 - 当前分支：`master`
 - 当前 commit：`5067397c2676d5aed50042fc39e5c8ee96eb0027`
 - 当前可见 GPU：1 张 RTX 5060 Laptop GPU
@@ -103,7 +105,7 @@ ncclAllReduce()
 - 单 GPU `world_size=1` 不能验证真实跨 rank collective、Channel 或 RDMA。
 - Mycroft 使用 NCCL 2.21.5，与当前 master 存在版本差异。
 
-## 下一项工作
+## 当时拟定的下一项学习工作（非当前任务）
 
 分析 `runRing()`、`ncclCollCbdPart()` 和 Ring 使用的 `Primitives`，确认：
 
@@ -112,3 +114,6 @@ ncclAllReduce()
 - GPU primitive 与 Channel 的 send/recv 连接如何衔接；
 - 多 Channel 如何并行处理同一个 AllReduce 的不同数据范围。
 
+## 产出
+
+- [阶段 01：Communicator 初始化与 AllReduce Host 任务提交](阶段01_Communicator与AllReduce任务提交.md)
