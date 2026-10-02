@@ -29,7 +29,7 @@ Day 13 不包含 NCCL 修改或编译结果；候选点只有经过 Day 16—20 
 
 ## Day 14：未插桩构建与加载基线
 
-当前状态：**真实构建与加载自检通过，证据已核对，待用户最终验收**。Crater 已使用 CUDA 12.5.82 从固定源码构建并加载未插桩 NCCL 2.21.5，运行版本、实际加载路径和退出码均符合要求。当前 WSL 是 Ubuntu 22.04.5、G++ 11.4.0；有 Make、Python 和 CMake，但未找到 `nvcc`、CUDA Toolkit 或 Docker，`nvidia-smi` 报告 GPU 访问被操作系统阻止。本次真实验证在 Crater 完成，未在 WSL 编译。GPU 不是本日版本检查的前提；Day 15 才需要 GPU 执行 collective。
+当前状态：**真实构建与加载基线已完成，用户已进入 Day 15**。Crater 已使用 CUDA 12.5.82 从固定源码构建并加载未插桩 NCCL 2.21.5，运行版本、实际加载路径和退出码均符合要求。当前 WSL 是 Ubuntu 22.04.5、G++ 11.4.0；有 Make、Python 和 CMake，但未找到 `nvcc`、CUDA Toolkit 或 Docker，`nvidia-smi` 报告 GPU 访问被操作系统阻止。本次真实验证在 Crater 完成，未在 WSL 编译。GPU 不是本日版本检查的前提；Day 15 才需要 GPU 执行 collective。
 
 用户返回的候选环境探针结果（基础镜像公开名称尚未提供）：
 
@@ -89,6 +89,7 @@ bash cluster/crater/scripts/build_nccl.sh
 | `JOBS` | `2`，控制并行编译数量；内存不足时可设 `1` |
 | `BUILDDIR` | 仓库根目录下 `.build/nccl`；必须不存在且位于 NCCL 源码树外；相对路径相对于调用者工作目录 |
 | `NVCC_GENCODE` | `-gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70`，包含 V100 原生代码和 PTX；其他 GPU 的原生代码可通过此变量显式指定 |
+| `NCCL_TRACE` | `0`；只接受 `0` 或 `1`，Day15 的单独观测构建使用 `1`，必须使用新输出目录 |
 
 例如新建另一份输出，避免复用不同参数的旧对象：
 
@@ -97,7 +98,7 @@ JOBS=1 BUILDDIR="$PWD/.build/nccl-run2" \
   bash cluster/crater/scripts/build_nccl.sh
 ```
 
-脚本固定 `DEBUG=0`、`TRACE=0`、`NVTX=1`、`PROFAPI=1`、`RDMA_CORE=0`、`CUDARTLIB=cudart_static`，构建完整 collective 集合，仅生成所需共享库。它清除环境中额外的 make/compiler flags，并保留完整编译命令日志。路径不能含空白，这是上游 Makefile 的限制。脚本不会自动安装工具、修改 NCCL 源码或删除旧构建目录。
+脚本固定 `DEBUG=0`、`NVTX=1`、`PROFAPI=1`、`RDMA_CORE=0`、`CUDARTLIB=cudart_static`，`TRACE` 默认 `0`，可用 `NCCL_TRACE=1` 在新目录构建单独的观测库。构建完整 collective 集合，仅生成所需共享库。它清除环境中额外的 make/compiler flags，并保留完整编译命令日志及 `trace` 值。路径不能含空白，这是上游 Makefile 的限制。脚本不会自动安装工具、修改 NCCL 源码或删除旧构建目录。已经验收的 Day14 产物仍是 `TRACE=0`；不能把新库的 hash 或运行选择当成旧库的运行证据。
 
 ### 使用镜像构建
 
@@ -212,7 +213,7 @@ status=PASS
 f3fe9df1bb787e0d8f82d60a185c69299ef3806010dcee35565f6b8f6bad7dc4
 ```
 
-本次构建与加载证据已核对；用户最终验收前不把 Day 14 标为完成。此结果不包含 GPU collective 验证，Dockerfile 也尚未实际构建；后续 Day 15 使用同一份项目库执行真实双 rank AllReduce。
+本次构建与加载证据已核对，用户已明确进入 Day 15。此结果不包含 GPU collective 验证，Dockerfile 也尚未实际构建；Day 15 使用同一份项目库执行真实双 rank AllReduce，当前进度见 [`workload README`](../../workloads/minimal_allreduce/README.md)。
 
 本地自动回归命令（不要求 CUDA/GPU，不生成伪 NCCL 库）：
 
@@ -222,4 +223,4 @@ python3 -m unittest discover -s tests/nccl -p 'test_*.py' -v
 git diff --check
 ```
 
-本地已验证范围：检查程序可用 G++ 11.4 严格警告编译；17 个 guard 测试通过，覆盖参数错误、缺失或非 ELF 库、系统库缺少 NCCL 接口、源码有已跟踪/未跟踪改动、固定 tag 缺失，以及无 CUDA 时准确阻塞且不创建构建目录；包含候选镜像探针检查、离线包解压后的固定 commit/tag/干净状态与 Git 对象完整性、包 checksum、元数据排除、旧归档/结果保留，以及构建失败退出码保存。源码测试只修改临时本地 clone。原有 Python、Event、E01/E02 回归也通过。本地单元回归与上述 Crater 真实构建/加载证据分别保留；用户最终验收后才将本日更新为已验证。
+本地已验证范围：检查程序可用 G++ 11.4 严格警告编译；17 个 guard 测试通过，覆盖参数错误、缺失或非 ELF 库、系统库缺少 NCCL 接口、源码有已跟踪/未跟踪改动、固定 tag 缺失，以及无 CUDA 时准确阻塞且不创建构建目录；包含候选镜像探针检查、离线包解压后的固定 commit/tag/干净状态与 Git 对象完整性、包 checksum、元数据排除、旧归档/结果保留，以及构建失败退出码保存。源码测试只修改临时本地 clone。原有 Python、Event、E01/E02 回归也通过。本地单元回归与上述 Crater 真实构建/加载证据分别保留。

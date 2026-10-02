@@ -7,7 +7,7 @@
 - 最终目标：完成 L2 NCCL 插桩原型，并在 Crater 多机 GPU 环境中完成真实验证
 - 工作强度：每个开发日 4—5 个专注小时，不绑定自然日期
 - 预计规模：26 个开发日；集群排队、权限申请和平台故障等待不计入开发日
-- 当前状态：Day 13 与 Event v2 契约纠错已完成；Day 14 真实 NCCL 2.21.5 构建与加载自检通过，证据已核对，待用户最终验收
+- 当前状态：Day 14 基线已完成；Day 15 技术验收通过，准备提交；Day16 待开始
 
 ## 1. 计划要解决的问题
 
@@ -537,7 +537,7 @@ third_party/nccl/
 
 **验收与预期现象**：真实 `libnccl.so` 构建成功；smoke program 能加载并返回 2.21.5；动态链接检查指向项目产物。若缺 CUDA devel 或构建资源，标记环境阻塞，不能用模拟器代替验收。
 
-**执行状态**：真实构建与加载自检通过，待用户最终验收。Crater 在 Ubuntu 22.04.4、G++ 11.4.0、CUDA 12.5.82 下从固定且干净的源码完成未插桩 NCCL 构建；临时与持久化库的 `ncclGetVersion` 均返回 `22105`，实际加载路径与指定产物一致，构建和持久化验证退出码均为 0。已保留工具链、构建参数、ELF SONAME 和库 SHA256 的脱敏证据。本地 WSL 仍无 CUDA devel；提供的 Dockerfile 尚未实际构建。用户验收前不标记完成或推进 Day 15。命令、样例与限制见 [`instrumentation/nccl-2.21.5/README.md`](../../instrumentation/nccl-2.21.5/README.md)。
+**执行状态**：真实构建与加载基线已完成，用户已明确进入 Day 15。Crater 在 Ubuntu 22.04.4、G++ 11.4.0、CUDA 12.5.82 下从固定且干净的源码完成未插桩 NCCL 构建；临时与持久化库的 `ncclGetVersion` 均返回 `22105`，实际加载路径与指定产物一致，构建和持久化验证退出码均为 0。已保留工具链、构建参数、ELF SONAME 和库 SHA256 的脱敏证据。本地 WSL 仍无 CUDA devel；提供的 Dockerfile 尚未实际构建。此验收不包含 GPU collective。命令、样例与限制见 [`instrumentation/nccl-2.21.5/README.md`](../../instrumentation/nccl-2.21.5/README.md)。
 
 **建议分支/commit**：从 Day 14 起使用功能分支；`build(e06): reproduce NCCL 2.21.5 toolchain`
 
@@ -560,7 +560,13 @@ workloads/minimal_allreduce/
 
 **验收与预期现象**：两个 rank 数值结果正确；至少三个连续 operation 完成；`ldd` 或等价证据明确指向 Day 14 构建的 NCCL 2.21.5；记录算法、协议和 transport 日志。拿不到同机双 GPU 时标记环境阻塞，不退回 E01/E02 作为验收。
 
+**执行状态**：已完成 API 返回、GPU 等待与 Ring 数据流讲解，用户明确授权补全实现。原生 C++ workload 提供文件 bootstrap、GPU 绑定、双进程启动、AllReduce 提交、stream 同步和全部元素校验；消息大小为 16 B、16 KiB、4 MiB，各连续三次，输入随应用 operation 序号变化以发现旧结果。Crater CUDA 12.5.82 下使用 g++ 编译，并在同机双 V100 上运行；首轮两个 rank 各九次操作全部正确，库版本、路径及 hash 与 Day14 一致，退出码均为 0，连接为 P2P/CUMEM。应用阶段标记尚不是 NCCL 插桩事件。独立 TRACE 补证结果见下一段；完整仓库检查通过，包括八十六项 Python、五项 C++ 测试及两组真实日志摘录的离线复查。程序、命令、证据与限制见 [`workloads/minimal_allreduce/README.md`](../../workloads/minimal_allreduce/README.md)。
+
+**当前补证步骤**：独立 `TRACE=1` 库已在 Crater 从同一固定且干净的源码完成构建、加载及双 GPU 运行；构建、持久化加载、作业和两个 rank 的退出码均为 0。构建验证日志给出的库 SHA256 为 `e4437dd0b48e3ab426b17b394043a0d162f1c9040b32bcf34b5b866e6286132a`，与 workload 环境记录一致；使用这个独立构建 hash 的离线复核已通过。rank0 的九次选择日志全部位于对应 API 调用区间：16 B 使用 RING/LL、1 channel；16 KiB 使用 RING/LL、2 channels；4 MiB 使用 RING/SIMPLE、4 channels，均为 CBDColl 调度路径，连接记录为 P2P/CUMEM。上游该日志只由 rank0 输出，不把字段补造给 rank1；两个 rank 各九次结果均正确。二十一项 workload 辅助测试、二十二项 NCCL 构建/包 guard 已通过。真实技术证据已齐全，当前准备提交并进入 Day16。
+
 **建议 commit**：`feat(e06): run native two-rank NCCL baseline`
+
+**提交准备**：公开样例保留两轮真实实验的脱敏摘录，并用同一离线核对脚本复查；不提交原始日志、库、上传包、个人旧学习笔记或 Day14 交接文件。当前功能分支为 `day15/native-allreduce-baseline`；Day16 源码修改在新的功能分支开始。
 
 ### Day 16：E06 真实 completion log 与 operation identity
 

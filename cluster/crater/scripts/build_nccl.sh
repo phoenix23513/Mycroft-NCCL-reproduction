@@ -9,9 +9,11 @@ expected_tag=v2.21.5-1
 mode=${1:---build}
 if [[ $# -gt 1 || ( "$mode" != --build && "$mode" != --check ) ]]; then
   echo "Usage: build_nccl.sh [--check|--build]" >&2
-  echo "Environment: CUDA_HOME, CXX, JOBS, BUILDDIR, NVCC_GENCODE" >&2
+  echo "Environment: CUDA_HOME, CXX, JOBS, BUILDDIR, NVCC_GENCODE, NCCL_TRACE=0|1" >&2
   exit 2
 fi
+trace=${NCCL_TRACE:-0}
+[[ "$trace" == 0 || "$trace" == 1 ]] || { echo "NCCL_TRACE must be 0 or 1" >&2; exit 2; }
 
 blocked() { echo "[environment blocked] $*" >&2; exit 2; }
 for tool in git make python3 realpath sha256sum readelf tee; do
@@ -62,6 +64,7 @@ if [[ "$source_dir$build_dir$cuda_home$cxx" =~ [[:space:]] ]]; then
 fi
 echo "[configuration] jobs=$jobs build_dir=$build_dir"
 echo "[configuration] NVCC_GENCODE=$gencode"
+echo "[configuration] TRACE=$trace"
 if [[ "$mode" == --check ]]; then
   echo "[preflight] PASS (no library built or loaded)"
   exit 0
@@ -78,7 +81,7 @@ trap 'echo "status=FAILED exit_code=$?" >> "$manifest"' ERR
 make_command=(make -C "$source_dir/src" -j "$jobs" lib
   "BUILDDIR=$build_dir" "CUDA_HOME=$cuda_home" "CUDA_INC=$cuda_home/include"
   "CUDA_LIB=$cuda_home/lib64" "CXX=$cxx" "NVCC_GENCODE=$gencode"
-  DEBUG=0 TRACE=0 ASAN=0 GCOV=0 KEEP=0 VERBOSE=1
+  DEBUG=0 "TRACE=$trace" ASAN=0 GCOV=0 KEEP=0 VERBOSE=1
   NVTX=1 PROFAPI=1 RDMA_CORE=0 CUDARTLIB=cudart_static ONLY_FUNCS=)
 {
   echo "status=BUILDING"
@@ -88,6 +91,7 @@ make_command=(make -C "$source_dir/src" -j "$jobs" lib
   echo "cuda_home=$cuda_home"
   echo "build_dir=$build_dir"
   echo "jobs=$jobs"
+  echo "trace=$trace"
   echo "NVCC_GENCODE=$gencode"
   echo "os:"
   cat /etc/os-release

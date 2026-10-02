@@ -29,7 +29,7 @@ def git(source, *arguments):
     ).stdout.strip()
 
 
-def package(output):
+def package(output, package_root=PACKAGE_ROOT, files=FILES):
     source = ROOT / "third_party/nccl"
     if git(source, "rev-parse", "HEAD") != COMMIT:
         raise RuntimeError("NCCL source is not at the pinned commit")
@@ -37,7 +37,7 @@ def package(output):
         raise RuntimeError("NCCL tag does not match the pinned commit")
     if git(source, "status", "--porcelain", "--untracked-files=all"):
         raise RuntimeError("NCCL source has modifications")
-    if output.exists():
+    if output.exists() or output.with_name(output.name + ".sha256").exists():
         raise RuntimeError("Upload archive already exists; choose another --output")
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="day14-package-") as directory:
@@ -67,17 +67,17 @@ def package(output):
             return info
 
         with tarfile.open(output, "x:gz") as archive:
-            for name in FILES:
-                archive.add(ROOT / name, f"{PACKAGE_ROOT}/{name}", filter=portable)
+            for name in files:
+                archive.add(ROOT / name, f"{package_root}/{name}", filter=portable)
             for name in tracked:
                 if name:
-                    archive.add(clone / name, f"{PACKAGE_ROOT}/third_party/nccl/{name}",
+                    archive.add(clone / name, f"{package_root}/third_party/nccl/{name}",
                                 recursive=False, filter=portable)
             # Exclude reflogs, hooks, local remotes and all personal project Git data.
             for name in metadata:
                 path = clone / ".git" / name
                 if path.exists():
-                    archive.add(path, f"{PACKAGE_ROOT}/third_party/nccl/.git/{name}",
+                    archive.add(path, f"{package_root}/third_party/nccl/.git/{name}",
                                 filter=portable)
     checksum = hashlib.sha256(output.read_bytes()).hexdigest()
     output.with_name(output.name + ".sha256").write_text(f"{checksum}  {output.name}\n")

@@ -1,0 +1,37 @@
+verification_scope=real_two_gpu_functional_baseline
+nccl_root=<NCCL_ROOT>
+CUDA_VISIBLE_DEVICES=<unset>
+NCCL_DEBUG=TRACE
+NCCL_DEBUG_SUBSYS=INIT,ENV,GRAPH,COLL
+NCCL_ALGO=<unset>
+NCCL_PROTO=<unset>
+os:
+PRETTY_NAME="Ubuntu 22.04.4 LTS"
+NAME="Ubuntu"
+VERSION_ID="22.04"
+VERSION="22.04.4 LTS (Jammy Jellyfish)"
+VERSION_CODENAME=jammy
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=jammy
+kernel:
+Linux 5.15.0-187-generic
+compiler:
+g++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0
+Copyright (C) 2021 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+cmake:
+not installed (optional; workload builds directly with g++)
+GPU inventory:
+index, name, uuid, pci.bus_id, driver_version
+0, Tesla V100-SXM2-32GB, GPU-REDACTED-0, 00000000:1C:00.0, 580.178.04
+1, Tesla V100-SXM2-32GB, GPU-REDACTED-1, 00000000:1E:00.0, 580.178.04
+GPU topology:
+NCCL library SHA256:
+e4437dd0b48e3ab426b17b394043a0d162f1c9040b32bcf34b5b866e6286132a  <NCCL_ROOT>/lib/libnccl.so.2.21.5
