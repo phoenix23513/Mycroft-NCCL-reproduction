@@ -1,0 +1,169 @@
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -39,7 +39,10 @@
+ LIBTARGET  := $(LIBNAME:%=%.$(NCCL_MAJOR).$(NCCL_MINOR).$(NCCL_PATCH))
+ STATICLIBTARGET := $(STATICLIBNAME)
+ PKGTARGET  := $(PKGCONFIGFILE)
++LIBSRCFILES += mycroft_m2.cc mycroft_operation_trace.cc
+ LIBOBJ     := $(LIBSRCFILES:%.cc=$(OBJDIR)/%.o)
++# Only project-owned host recorder/adapter uses C++17; device code stays upstream C++11.
++$(OBJDIR)/mycroft_m2.o $(OBJDIR)/mycroft_operation_trace.o: CXXFLAGS += -std=c++17
+ DEPFILES   := $(LIBOBJ:%.o=%.d)
+ LDFLAGS    += -L${CUDA_LIB} -l$(CUDARTLIB) -lpthread -lrt -ldl
+ 
+--- a/src/include/proxy.h
++++ b/src/include/proxy.h
+@@ -7,6 +7,7 @@
+ #ifndef NCCL_PROXY_H_
+ #define NCCL_PROXY_H_
+ 
++#include "mycroft_m2.h"
+ #include "device.h"
+ #include "info.h"
+ #include "socket.h"
+@@ -56,6 +57,7 @@
+ 
+   union ncclProxyOpSpecifics specifics;
+ 
++  MycroftM2Tag mycroft_m2_tag;
+   struct ncclProxyOp *enqNext;
+ };
+ 
+@@ -87,6 +89,9 @@
+   void* profilingEvents[NCCL_STEPS];
+   void* recvRequestsCache[NCCL_STEPS];
+   int recvRequestsSubCount;
++  MycroftM2Tag mycroft_m2_tag;
++  MycroftM2Sampling mycroft_m2_sampling;
++  uint64_t mycroft_m2_ready;
+ };
+ 
+ struct ncclProxyArgs {
+--- a/src/enqueue.cc
++++ b/src/enqueue.cc
+@@ -5,6 +5,7 @@
+  ************************************************************************/
+ 
+ #include "enqueue.h"
++#include "mycroft_m2.h"
+ #include "argcheck.h"
+ #include "coll_net.h"
+ #include "gdrwrap.h"
+@@ -267,6 +268,7 @@
+   struct ncclKernelPlan::Channel *chans = plan->channels;
+   struct ncclWorkElem workElem;
+   uint64_t opCount = uint64_t(plan->collOpCount++) << 1 | 0;
++  mycroftM2Collective(comm, plan, collInfo);
+   ncclRegBufferType regBufType = collInfo->regBufType;
+   int nChannels = std::min(collInfo->nChannels, usableChannels);
+   size_t countPerChannel = DIVUP(collInfo->count, nChannels);
+@@ -329,6 +331,7 @@
+   struct ncclKernelPlan::Channel *chans = plan->channels;
+   struct ncclWorkElem workElem;
+   uint64_t opCount = uint64_t(plan->collOpCount++) << 1 | 0;
++  mycroftM2Collective(comm, plan, collInfo);
+   uint64_t workCount;
+   uint64_t workOffset = 0;
+   uint32_t typeSize = ncclTypeSize(collInfo->datatype);
+@@ -436,6 +439,7 @@
+   struct ncclKernelPlan::Channel *chans = plan->channels;
+   size_t enqBytes;
+   uint64_t opCount = uint64_t(plan->collOpCount++) << 1 | 0;
++  mycroftM2Collective(comm, plan, collInfo);
+   size_t typeSize = ncclTypeSize(collInfo->datatype);
+   size_t workBytesTotal = collInfo->count * typeSize;
+   size_t workCountTotal = collInfo->count;
+@@ -1099,6 +1103,7 @@
+ 
+ static ncclResult_t uploadProxyOps(struct ncclComm* comm, struct ncclKernelPlan* plan) {
+   uint64_t collOpCount = comm->sharedRes->collOpCount;
++  mycroftM2Identity(comm, plan, collOpCount);
+   // Advance comm's collOpCount by number of colls in this plan.
+   comm->sharedRes->collOpCount += plan->collOpCount;
+ 
+@@ -1400,11 +1405,13 @@
+     launchConfig.stream = launchStream;
+ 
+     CUDACHECK(cudaLaunchKernelExC(&launchConfig, fn, args));
++    mycroftM2Launched(comm, plan, launchStream);
+     return ncclSuccess;
+   }
+   #endif
+   // Standard kernel launch
+   CUDACHECK(cudaLaunchKernel(fn, grid, block, args, smem, launchStream));
++  mycroftM2Launched(comm, plan, launchStream);
+   return ncclSuccess;
+ }
+ 
+--- a/src/proxy.cc
++++ b/src/proxy.cc
+@@ -355,6 +355,9 @@
+   }
+   //memset(sub, 0, sizeof(struct ncclProxySubArgs));
+   sub->connection = op->connection;
++  sub->mycroft_m2_tag = op->mycroft_m2_tag;
++  sub->mycroft_m2_sampling = {};
++  sub->mycroft_m2_ready = 0;
+   sub->channelId = op->channelId;
+   sub->nsteps = op->nsteps;
+   sub->nbytes = op->nbytes;
+@@ -526,6 +529,7 @@
+ 
+   if (justInquire) *justInquire = true;
+   else {
++    mycroftM2Attach(comm, channel, type, peer, connector, op);
+     NCCLCHECK(ncclLocalOpAppend(comm, &connector->proxyConn, op));
+   }
+   return ncclSuccess;
+@@ -934,7 +938,8 @@
+     state->stop = 1;
+     pthread_cond_signal(&state->opsPool->cond);
+     pthread_mutex_unlock(&state->opsPool->mutex);
+-    pthread_join(state->thread, NULL);
++    int mycroftJoined = pthread_join(state->thread, NULL);
++    if (mycroftJoined == 0) mycroftM2ProxyStopped(proxyState);
+   }
+ 
+   // Free off any memory allocated for the proxy arg pools
+--- a/src/transport/net.cc
++++ b/src/transport/net.cc
+@@ -1048,6 +1048,7 @@
+   }
+   args->idle = 1;
+   if (args->state == ncclProxyOpProgress) {
++    for (int s = 0; s < args->nsubs; ++s) mycroftM2SendSample(args, args->subs+s, false);
+     int p = args->protocol;
+     int maxDepth = std::min(NCCL_STEPS, NCCL_SHARED_STEPS/args->nsubs);
+     for (int s=0; s<args->nsubs; s++) {
+@@ -1117,6 +1118,7 @@
+             buff = sub->reg ? (char*)sub->recvbuff : localBuff+resources->recvMem->connFifo[buffSlot].offset;
+           }
+           if (ready) {
++            mycroftM2Ready(args, sub);
+             // Data is ready, try to send.
+             NCCLCHECK(proxyState->ncclNet->isend(resources->netSendComm, buff, size, resources->tpRank, sub->mhandle, sub->requests+buffSlot));
+             if (sub->requests[buffSlot] != NULL) {
+@@ -1169,6 +1171,7 @@
+             if (sub->reg && sub->nbytes > 0) {
+               NCCLCHECK(proxyState->ncclNet->deregMr(resources->netSendComm, sub->mhandle));
+             }
++            mycroftM2SendSample(args, sub, true);
+             args->done++;
+           }
+         }
+@@ -1228,6 +1231,7 @@
+   }
+   args->idle = 1;
+   if (args->state == ncclProxyOpProgress) {
++    for (int s = 0; s < args->nsubs; ++s) mycroftM2RecvSample(args, args->subs+s, false);
+     int p = args->protocol;
+     int maxDepth = std::min(NCCL_STEPS, NCCL_SHARED_STEPS/args->nsubs);
+     for (int s=0; s<args->nsubs; s+=args->subs[s].groupSize) {
+@@ -1426,6 +1430,7 @@
+               if (sub->reg && sub->nbytes > 0) {
+                 NCCLCHECK(proxyState->ncclNet->deregMr(resources->netRecvComm, sub->mhandle));
+               }
++              mycroftM2RecvSample(args, sub, true);
+               args->done++;
+               break;
+             }

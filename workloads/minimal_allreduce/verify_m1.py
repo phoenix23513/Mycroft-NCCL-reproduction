@@ -57,7 +57,7 @@ def restore_application_records(log, hostname=None):
     return "\n".join(output) + "\n", recovered
 
 
-def verify(directory, expected_sha256=TRACE_SHA256, confirm_distinct_nodes=False):
+def verify(directory, expected_sha256=TRACE_SHA256, confirm_distinct_nodes=False, *, build_validator=None):
     require(re.fullmatch(r"[0-9a-f]{64}", expected_sha256), "invalid expected library SHA256")
     config = json.loads((directory / "run-config.json").read_text())
     require(config["expected_sha256"] == expected_sha256, "run configuration library differs")
@@ -75,12 +75,15 @@ def verify(directory, expected_sha256=TRACE_SHA256, confirm_distinct_nodes=False
         require(probe["rank"] == rank and not probe["blocked_reasons"], f"rank {rank}: resources blocked")
         node_ids.append(probe["node_identifiers"])
         manifest = (folder / "build-manifest.txt").read_text()
-        require(single(r"^source_commit=(.+)$", manifest, "source commit") == COMMIT and
+        if build_validator is not None:
+            build_validator(folder, manifest)
+        else:
+            require(single(r"^source_commit=(.+)$", manifest, "source commit") == COMMIT and
                 single(r"^source_tag=(.+)$", manifest, "source tag") == "v2.21.5-1" and
                 single(r"^source_clean=(.+)$", manifest, "source state") == "yes" and
                 single(r"^trace=(.+)$", manifest, "TRACE flag") == "1" and
                 re.findall(r"^status=(.+)$", manifest, re.MULTILINE)[-1:] == ["PASS"],
-                f"rank {rank}: fixed clean TRACE build evidence missing")
+                    f"rank {rank}: fixed clean TRACE build evidence missing")
         log, recovered_records[rank] = restore_application_records(
             (folder / "run.log").read_text(), probe.get("hostname"))
         requested = single(r"^requested_library=(.+)$", log, "requested library")

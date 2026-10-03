@@ -1,6 +1,6 @@
 # NCCL 2.21.5 候选插桩点
 
-本文记录 Day13 得到的候选位置，尚无实际插桩；按 [v0.5 计划](../../docs/plans/Mycroft_26日开发路线图.md) 的 M1—M3，用普通 RING/SIMPLE NET/IB 真实运行验证。每个位置都基于 submodule 固定的 `v2.21.5-1` 源码。Graph、完整 P2P 和多协议覆盖移出当前范围。
+本文记录 Day13 得到的候选位置；M2 已按这些位置提供 adapter/patch，尚待真实 CUDA 构建与运行验证。按 [v0.5 计划](../../docs/plans/Mycroft_26日开发路线图.md) 的 M1—M3，用普通 RING/SIMPLE NET/IB 真实运行验证。每个位置都基于 submodule 固定的 `v2.21.5-1` 源码。Graph、完整 P2P 和多协议覆盖移出当前范围。
 
 ## 候选点总览
 
@@ -11,7 +11,7 @@
 | T2 | `src/enqueue.cc:1100` `uploadProxyOps()` 中，临时转换 `q->opCount` 后、`ncclProxySaveOp()` 前 | 全局化的 `opCount`、channel、collective、protocol、nsteps、nbytes | 把 operation 身份送入 Proxy | **有 Proxy 路径的首选 operation/channel 插桩点**；不能保证覆盖普通 P2P |
 | T3 | `src/proxy.cc:350` `ncclProxyOpToArgs()` | `opCount` 与每个 sub 的 channel、peer、nsteps、nbytes | 验证 T2 信息确实进入 Proxy progress | 候选；不应与 T2 重复长期记录 |
 | T4 | `src/transport/net.cc:1030` `sendProxyProgress()` | readiness 条件、`transmitted`、`done` | 生成发送侧周期性进度快照 | **首选进度插桩区域**；不能把 `posted` 当 GPU ready |
-| T5 | `src/transport/net.cc:1184` `recvProxyProgress()` | `posted/received/flushed/transmitted/done` | 补充所选延迟用例需要的对端/接收证据 | 不套用 E02 发送侧字段定义；只采必需状态，不足时保留并列候选 |
+| T5 | `src/transport/net.cc:1184` `recvProxyProgress()` | `posted/received/transmitted/done`；flush 完成后推进 transmitted | 补充所选延迟用例需要的对端/接收证据 | sub->flushed 字段存在，但该 NET 路径未独立维护；不套用 E02 发送侧定义 |
 | T6 | `src/transport/net_ib.cc` 的 connect/accept，QPN 在 `:1022/:1335` 写入 metadata | link layer、device、LID 或 RoCE GID、一个或多个 QPN | 建立 IB/RoCE connection 元数据 | 候选且 IB-specific；Socket transport 不使用 QP |
 
 ## T2：operation 与 channel 关联
@@ -58,6 +58,8 @@ total_steps           = sub->nsteps
 ```
 
 对外转换成 chunk 前必须除以或按 `sliceSteps` 归一化，且四个量必须使用同一单位。`sub->posted` 只表示 Proxy 给 GPU 的可用槽位/credit，不代表 GPU 数据已准备好。
+
+M2 框架的 `normalize_send_steps()` 只检查普通计数的整数 slice 和累计顺序，adapter 已提供接入代码，真实运行仍待验证。`sub->reg` 分支可以动态增加 `nsteps`，并存在单 GPU step 对多个网络 step 的区别；接口保留路径标记，当前转换器拒绝其未经确认的映射。readiness 必须去重并在 isend 前维护，即使 request 暂未返回或延迟提交，周期采样仍须继续。
 
 完成条件候选是所有 sub 的 `done == nsteps`，而不是单个 channel 的一个 request 完成。
 

@@ -6,7 +6,7 @@
 - NCCL 目标版本：2.21.5
 - 最终目标：在真实 NCCL 2.21.5 双节点 RDMA 运行中，完成最小的日志采集、异常触发和依赖驱动 RCA 闭环
 - 执行规模：剩余工作按五个必做里程碑验收，不再要求逐项完成原 Day16—26；不承诺固定开发日数量
-- 当前状态：Day15 已完成并提交/push（`4638847`）。已有 Day16 采集接口与结果打包骨架，尚无插桩或真实采集。M1 补齐运行库后的 Crater 重试完成双节点 NET/IB AllReduce，原作业因日志交错导致核对失败，修复后的原始日志离线复核通过。M1 技术证据齐全，最终验收待用户确认。
+- 当前状态：Day15 已完成并提交/push（`4638847`）。已有 Day16 采集接口与结果打包骨架，现复用于 M2。M1 补齐运行库后的 Crater 重试完成双节点 NET/IB AllReduce，原作业因日志交错导致核对失败，修复后的原始日志离线复核通过。M1 已验证并提交到 main（`f333d6d`）；用户明确进入 M2。M2 进程内有界记录、周期辅助、丢失统计和停止后导出已实现并通过 CPU 检查；NCCL adapter/patch、构建/双 rank 启动/打包和真实核对代码已实现；Crater 插桩库 CUDA 构建与加载检查已通过，r3 双节点 GPU 采集及技术核对已通过，完整 M2 验收待用户复核。
 
 ## 1. 计划要解决的问题
 
@@ -210,7 +210,7 @@ E01/E02 ---------------------------> 单元回归输入（不作为运行验收�
 | 08—10 | E02 | GPU/Proxy/Network 三进度状态机 |
 | 11—13 | E03 | Event v1/v2、乱序恢复、NCCL 2.21.5 映射 |
 | 14—15（已完成） | E06 基线 | 固定 NCCL 构建、原生双 rank 正确性与真实选择日志 |
-| M1（当前） | 目标路径 | 双物理节点、项目 NCCL、真实 NET/IB 与正确性 |
+| M1（已验证） | 目标路径 | 双物理节点、项目 NCCL、真实 NET/IB 与正确性 |
 | M2 | 最小采集 | RING/SIMPLE 的身份、completion、周期进度及必要对端证据 |
 | M3 | 异常输入 | 正常/仅插桩/软件延迟对照与真实日志 |
 | M4 | 分析核心 | 同一证据集上的 Trigger、MinOp/MinData、最小 RCA |
@@ -535,7 +535,7 @@ workloads/minimal_allreduce/
 
 **提交状态**：公开样例保留两轮真实实验的脱敏摘录，并用同一离线核对脚本复查；未提交原始日志、库、上传包或个人旧学习笔记。Day15 已提交为 `4638847`，推送到 `origin/day15/native-allreduce-baseline`。随后创建 `day16/operation-completion`，Day16 修改独立推进。
 
-### M1：目标 NET/RDMA 路径验证（当前下一步）
+### M1：目标 NET/RDMA 路径验证（已验证）
 
 **目标与输入输出**：复用固定源码、已验证 CUDA devel 环境和 Day15 原生 workload，在两个物理节点各运行一个 rank/GPU。输出正确性、项目库来源、实际节点分布、transport 和连接证据。
 
@@ -547,7 +547,7 @@ workloads/minimal_allreduce/
 
 **验收**：两个 rank 所有元素正确、退出码为 0；项目 NCCL 版本/加载路径/hash 一致；两个真实物理节点；明确 NET/IB 和有效连接。缺少 RDMA 或节点资源时保留诊断包、标记环境阻塞；可做本地开发，但不能拿 Day15 P2P 或 Socket 顶替验收。
 
-**当前状态**：技术证据齐全，最终验收待用户确认。首轮缺少 `libibverbs.so.1`，停在资源预检；用户通过 Crater 派生镜像补齐运行库后，清理远端旧目标并复用了 r1 名称。重试归档 SHA256 为 `22262421a9dfdb765ac3e3e0fc64a7c0d5c6e6d336e25bd1f29e045f24feb59d`；两侧 probe/build/workload 均退出 0，各完成九次 AllReduce，项目 TRACE 库 hash 与独立构建一致，两个不同物理节点/不同 GPU、同一 communicator、NET/IB 双向连接证据齐全。rank0 的实际计划为 RING/SIMPLE：16 B 和 16 KiB 各使用 1 channel，4 MiB 使用 2 channels。原作业整体退出 1，原因是应用的分段 stdout 输出被完整 Proxy TRACE 插入，核对器误报 `operation stages differ`。已修复离线核对器，按原始字节片段恢复 rank0 两行、rank1 五行，18 项数值检查及完整技术复核通过；保留原始日志和失败状态，不要求重跑 GPU。两侧 memlock 仍为 64 KiB，但本轮实际通信未被阻塞，不新增平台配置前置任务。已把未来应用记录改为整行一次 `fwrite`，该 C++ 输出修复尚未在 Crater 编译运行。本次全仓库检查通过（102 项 Python、5 项 C++），两组 Day15 真实摘录与一组 M1 双节点 NET/IB 真实摘录均通过离线复核。公开 M1 摘录位于 `results/samples/e06/m1/`，原失败状态与恢复行计数保留，脱敏与筛选规则可复查。原运行与重试分别保存在忽略的 `.build/m1-download/`，重试离线报告为 `.build/m1-download/r1-retry/offline-recheck.txt`。下一步是用户观察本轮节点、数值和 transport 证据并确认 M1；确认后进入 M2，不在本次结果分析中自动推进。
+**当前状态**：已验证；证据齐全后用户明确进入 M2。首轮缺少 `libibverbs.so.1`，停在资源预检；用户通过 Crater 派生镜像补齐运行库后，清理远端旧目标并复用了 r1 名称。重试归档 SHA256 为 `22262421a9dfdb765ac3e3e0fc64a7c0d5c6e6d336e25bd1f29e045f24feb59d`；两侧 probe/build/workload 均退出 0，各完成九次 AllReduce，项目 TRACE 库 hash 与独立构建一致，两个不同物理节点/不同 GPU、同一 communicator、NET/IB 双向连接证据齐全。rank0 的实际计划为 RING/SIMPLE：16 B 和 16 KiB 各使用 1 channel，4 MiB 使用 2 channels。原作业整体退出 1，原因是应用的分段 stdout 输出被完整 Proxy TRACE 插入，核对器误报 `operation stages differ`。已修复离线核对器，按原始字节片段恢复 rank0 两行、rank1 五行，18 项数值检查及完整技术复核通过；保留原始日志和失败状态，不要求重跑 GPU。两侧 memlock 仍为 64 KiB，但本轮实际通信未被阻塞，不新增平台配置前置任务。已把未来应用记录改为整行一次 `fwrite`，该 C++ 输出修复尚未在 Crater 编译运行。本次全仓库检查通过（102 项 Python、5 项 C++），两组 Day15 真实摘录与一组 M1 双节点 NET/IB 真实摘录均通过离线复核。公开 M1 摘录位于 `results/samples/e06/m1/`，原失败状态与恢复行计数保留，脱敏与筛选规则可复查。原运行与重试分别保存在忽略的 `.build/m1-download/`，重试离线报告为 `.build/m1-download/r1-retry/offline-recheck.txt`。M1 已提交并推送到 main（`f333d6d`）；用户随后明确授权搭建 M2 框架，当前推进 M2。
 
 ### M2：最小 completion/state log
 
@@ -566,7 +566,13 @@ workloads/minimal_allreduce/
 
 **验收与预期现象**：真实连续 AllReduce 至少三次，每 rank 每操作恰有一条 completion；身份/大小/channel 对账通过。合适消息量或明确记录的采样周期下，至少一个真实操作得到两条 state log；采样量不因通信停滞而停止。completion 观测有真实执行依据，所有元素正确，采集丢失为零或足以明确拒绝该次诊断。源码位置、支持范围和真实证据保存在同一实验 README/小型样例中。
 
-**当前已知结论**：Day16 静态追踪确认 CBDColl 序号在 channel 循环外产生；GPU work 没有完整 operation 身份，work/FIFO slot/plan 的粒度不同；普通无 Proxy 路径也可能推进历史计数，但无 q 条目可采集；`workFifoDone` 在通信执行前更新。Graph 与 P2P 覆盖问题保留为限制，本版不实现其扩展。当前 C++ 函数仍返回 `NotImplemented`，核对入口退出 2；尚无 patch 或真实 capture。
+**当前已知结论**：Day16 静态追踪确认 CBDColl 序号在 channel 循环外产生；GPU work 没有完整 operation 身份，work/FIFO slot/plan 的粒度不同；普通无 Proxy 路径也可能推进历史计数，但无 q 条目可采集；`workFifoDone` 在通信执行前更新。Graph 与 P2P 覆盖问题保留为限制，本版不实现其扩展。M2 开发中：复用 Day16 目录实现预分配有界记录、多生产者独立槽写入、周期到期保留未变化快照、停止后统计和导出；发送/接收原始计数及身份/plan 元数据均保存。step→slice、关联缺失/重复、累计倒退和丢失检查已可在 CPU 上运行。导出 manifest 明确标为 adapter/completion 未验证且不具备真实诊断资格，不能把手写 fixture 作为运行证据。NCCL adapter/patch 已接入身份、实际 channel/peer、Proxy 状态、同进程 CLOCK_MONOTONIC、实际 launch stream 的 CUDA event 与 abort/error 观测，并确认 Proxy 线程已 join 才导出。独立构建保留固定原源码 archive、patch/新增源码/产物 hash；双 rank runner 复用 M1，真实核对对账构建、加载、数值、raw/Event 及应用阶段时间。上传包和成功/失败单文件结果交付入口已有代码；当前下一项为复用已构建插桩库进行同范围双节点 GPU 采集验证。本地已通过 129 项 Python、5 项 C++ 及历史真实日志离线回归，其中 M2 的 32 项检查包含源码包/patch 准备及核对负例；这些检查与真实运行证据分别判断。2026-10-03 收到 Crater 的 `m2-build-r1.tar.gz`，归档 SHA256 为 `b6af08d24ae7aa940af17ae0837cbdebf2d4c870bf93a7873f6b9132bea8315e`；Ubuntu 22.04.4、G++ 11.4.0、CUDA 12.5.82 下插桩库构建及加载检查退出 0，版本为 `22105`，三个 M2 接口导出。离线重新应用上传包的 patch，原源码、五项插桩输入和九项准备后源码 hash 均与构建记录一致；结果包无缺失文件。新库 SHA256 为 `485db701953f4b1dd499bdfb5de8abe285646441c7bfaa35290fdd6f3e67ed4e`，实际库留在远端供 GPU runner 再次校验；本地未加载该二进制。原包与离线报告保存在忽略的 `.build/m2-download/`。构建包明确 `gpu_execution=NOT_RUN`。随后收到首轮 `m2-capture-r1.tar.gz`，归档 SHA256 为 `b0f9e622b371525969eed7ad3221cec53281c07e5aed8896e926800e0d58125a`：两侧 probe、workload 编译和运行均退出 0，18 项结果正确，所加载库与已核对构建一致；但两侧 DMI 与 kernel boot 标识均相同，属于同一主机上的两个不同 GPU/Pod，故物理双节点检查失败，原作业退出 1。保留原始结果与失败结论；独立调用逐 rank capture 检查后，身份/channel/peer、九条 completion、raw/Event、单位与单调性、最终状态及零丢失均通过，两侧 send/recv 样本分别为 2171/2249 和 224/286，周期中间窗口分别为 2147、200；实际 channel 数为 1,1,1,1,1,1,2,2,2，跨 rank 身份一致。这些仅是同主机 NET/IB 采集证据，不能冒充双物理节点验收。原包及离线报告保存在 `.build/m2-download/capture-r1/`。M2 未验收；下一步修正物理节点调度后复用现有上传包和已构建库，使用新的采集编号，无需重复构建。
+
+**当前调度与运行阻碍**：用户确认 PyTorch 双 Role 的节点控制由整个作业共用；Custom 单机批处理支持 RDMA 与节点白名单。已用两个 Custom 作业分别指定不同节点，共用 `m2-capture-r2` 与已构建的 `m2-build-r1/nccl/`。返回归档 SHA256 为 `cb644fc6b2880bdc7730a59a780edd9c51a35ff647ae0cafb18e939ea6be6f0a`，本地核对一致：两侧 run_id、构建来源和记录的库 hash 一致，probe 与 workload 编译退出 0，但两侧 native workload 均退出 -11（SIGSEGV）。两侧已有 `comm_init_begin`，没有 `comm_init_return` 或 `m2_capture=STARTED`；首个明确错误均为 `ibv_create_cq failed with error Cannot allocate memory`，十四项 capture 文件尚未生成，M2 核对未执行。两侧 DMI 标识均不可读取（null，不是相同硬件标识），kernel boot 标识不同，不沿用 r1 的同主机判断。原始证据和离线报告保存在 `.build/m2-download/capture-r2/`。
+
+用户确认 r2 两侧 Custom Shell 均为普通用户，且页面支持 root；随后按最小对照两侧改用 root，复用现有包和库，以新编号 r3 运行。Crater [官方 RDMA 文档](https://raids-lab.github.io/crater/zh/docs/admin/more/rdma/)记录的锁内存权限和运行时限制问题是本次排查依据。root 身份不保证有效 `IPC_LOCK` 权限；结果包未记录有效 capabilities，且 r2 无崩溃回溯，ENOMEM 的具体原因及 SIGSEGV 位置仍未确定，保留失败证据，不把推断写成根因已证实。
+
+**当前真实证据（r3）**：2026-10-03 返回 `m2-capture-r3.tar.gz`，本地 SHA256 为 `5dd367f9e0742cf32d1cad7dad22728cbee1602d808bf29fd5fe9586ddb02ed7`（未取得本轮远端 hash，未宣称两端 hash 对比通过）。包内 33 项必要文件齐全；两侧 run_id、保存的构建来源及记录的库 hash 与已核对构建一致。两侧 probe/build/workload 和作业整体均退出 0，初始化正常返回、采集正常启动，CQ ENOMEM 与 SIGSEGV 均未出现。两侧 DMI 标识和 kernel boot 标识均不同，双物理节点证据通过；各侧 boot 标识与 r2 对应一致，memlock soft/hard 仍为 64 KiB，因此本轮成功不能解释成提高了 memlock 上限。两侧各九次 AllReduce，18 项数值检查正确，每侧九条 completion；身份、channel/peer、大小、单操作 plan、真实执行 stream、raw/Event 对账、单位、单调性、最终状态和零丢失均通过。rank0 send/recv 样本为 2996/3026，周期中间窗口 2972；rank1 为 341/424，周期中间窗口 317。独立运行本地 `verify_capture.py` 退出 0，输出与包内分析逐字一致：`m2_technical_checks=PASS`、`capture_verification=PASS`。completion 仍只是本地整体 collective 的 CPU 完成观测，readiness 是观察到的可提交 slice 边界，不声称精确 GPU 时间或硬件故障证明。原归档位于 `.build/m2-download/`，解包结果和离线报告位于 `.build/m2-download/capture-r3/`。当前技术证据已通过，完整 M2 验收待用户复核/明确进入下一步；不新增重跑或构建任务，研究范围和验收标准保持不变。
 
 ### M3：真实软件延迟与对照证据
 

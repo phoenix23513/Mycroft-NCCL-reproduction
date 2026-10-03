@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CPU-only syntax checks; this is not NCCL build or GPU acceptance.
+# CPU recorder/schema checks; this is not NCCL build or GPU acceptance.
 set -euo pipefail
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 project_root=$(cd -- "$source_dir/../../.." && pwd)
@@ -16,6 +16,8 @@ spec = importlib.util.spec_from_file_location("day16_verify_capture", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 PY
-echo 'day16_framework=PASS scope=CPU_syntax_and_schema_import_only'
-echo 'day16_capture=NOT_IMPLEMENTED'
+python3 -m unittest discover -s "$source_dir/tests" -p 'test_*.py'
+echo 'day16_framework=PASS scope=CPU_recorder_schema_and_contract_tests_only'
+echo 'day16_capture=CPU_RECORDER_ONLY'
+echo 'day16_nccl_adapter=PATCH_PRESENT_CUDA_BUILD_NOT_RUN'
 echo 'day16_gpu_acceptance=NOT_RUN'

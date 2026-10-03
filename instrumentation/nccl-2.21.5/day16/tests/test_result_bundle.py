@@ -38,12 +38,18 @@ class ResultBundleTests(unittest.TestCase):
         self.write("run-status.txt", "job_exit_code=0\n")
         self.write("workload/rank0.log", "packaging unit fixture\n")
         self.write("trace/rank0.jsonl", '{"fixture":"packaging_only"}\n')
+        for name in ("send-rank0.jsonl", "send-rank1.jsonl", "recv-rank0.jsonl", "recv-rank1.jsonl",
+                     "channel-map.jsonl", "plan-map.jsonl"):
+            self.write(f"trace/{name}", '{"fixture":"packaging_only"}\n')
         self.write("lib/libnccl.so", "excluded unit fixture\n")
         self.write("include/nccl.h", "excluded unit fixture\n")
         digest = BUNDLE.package_results(self.results, self.output)
         members = self.read_members()
         self.assertEqual(members["day16-results/workload/rank0.log"], b"packaging unit fixture\n")
         self.assertIn("day16-results/trace/rank0.jsonl", members)
+        for name in ("send-rank0.jsonl", "send-rank1.jsonl", "recv-rank0.jsonl", "recv-rank1.jsonl",
+                     "channel-map.jsonl", "plan-map.jsonl"):
+            self.assertIn(f"day16-results/trace/{name}", members)
         self.assertFalse(any("/lib/" in name or "/include/" in name for name in members))
         self.assertEqual(digest, hashlib.sha256(self.output.read_bytes()).hexdigest())
         self.assertEqual(list(self.folder.glob("*.tar.gz")), [self.output])

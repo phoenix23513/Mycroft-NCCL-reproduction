@@ -1,6 +1,6 @@
 # NCCL 2.21.5 Instrumentation
 
-Day13 使用官方 NCCL submodule 做源码映射；Day14—15 已建立真实构建和原生 workload 基线。当前按 [v0.5 核心复现计划](../../docs/plans/Mycroft_26日开发路线图.md) 的 M1—M5 推进：先确认双节点 NET/RDMA，再验证最小插桩、软件延迟和 Trigger/RCA。
+Day13 使用官方 NCCL submodule 做源码映射；Day14—15 已建立真实构建和原生 workload 基线。当前按 [v0.5 核心复现计划](../../docs/plans/Mycroft_26日开发路线图.md) 的 M1—M5 推进：M1 双节点 NET/IB 已验证，M2 最小采集框架见 [`day16/README.md`](day16/README.md)，M2 双节点真实插桩技术核对已通过，完整验收待用户复核；软件延迟和 Trigger/RCA 尚待验证。
 
 固定基线：
 
@@ -24,7 +24,7 @@ git -C third_party/nccl rev-parse HEAD
 
 - [`tracepoints.md`](tracepoints.md)：候选插桩点、能观察的状态和 M2—M3 动态验证清单；
 - [`../../docs/architecture/event-field-sources.md`](../../docs/architecture/event-field-sources.md)：论文字段、版本化 Event 与 NCCL 成员之间的映射及限制。
-- [`day16/README.md`](day16/README.md)：已有采集接口、路径限制、核对入口和单文件结果打包；复用于 M2，真实采集尚未实现，Graph/完整 P2P 扩展不在当前执行范围。
+- [`day16/README.md`](day16/README.md)：M2 记录器、NCCL adapter/patch、独立构建与双节点运行包、结果核对及实验设计；Crater 插桩库 CUDA 构建与加载检查已通过，双节点 GPU 采集及技术核对已通过，完整 M2 验收待用户复核，Graph/完整 P2P 扩展不在当前执行范围。
 
 Day13 不包含 NCCL 修改或编译结果；候选点只有经过 M2—M3 的真实 NCCL 运行验证后才能升级为已确认插桩语义。
 

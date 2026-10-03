@@ -1,39 +1,156 @@
 # M2 最小采集：保留的 Day16 框架
 
-当前状态：框架已搭建，C++ 采集函数仍返回 `NotImplemented`，真实结果核对入口仍退出 2；结果打包工具可独立使用。尚无 Day16 NCCL patch、采集结果或 GPU 验收，不能把 Day15 的应用标记改名为 completion log。
+当前状态：进程内有界记录器、NCCL adapter/补丁、独立源码准备与构建入口、双 rank 启动、结果核对及单文件打包已实现。Crater 插桩库构建与加载检查已通过；r3 双物理节点 NET/IB 采集及本地独立技术核对通过，18 项数值结果正确，每侧九条 completion、周期中间进度齐全且零丢失。完整 M2 验收待用户复核，当前无需重跑。导出包含 Event v2、原始发送/接收状态及身份/plan 元数据。
 
-执行依据已更新为 [v0.5 核心复现计划](../../../docs/plans/Mycroft_26日开发路线图.md)：当前先执行 M1 双节点 NET/RDMA 路径确认，再执行 M2 普通 RING/SIMPLE 的最小采集。本文保留既有接口和源码结论；Graph、grouped collectives、完整 P2P GPU 标记/managed memory 方案均已移出当前执行范围，不再是本框架的验收门槛。
+执行依据为 [v0.5 核心复现计划](../../../docs/plans/Mycroft_26日开发路线图.md)。M1 双节点 NET/IB 路径已验证，用户已授权进入 M2 普通 RING/SIMPLE 最小采集。Graph、grouped collectives、完整 P2P GPU 标记/managed memory 方案均已移出当前范围。
+
+## 本轮实验设计与构建过程
+
+研究问题：在 M1 已验证的双节点 NET/IB 路径上，能否把真实操作身份、中间通信进度和本地整体完成可靠关联？本轮仅加入插桩，继续串行执行 float32 Sum AllReduce；RING/SIMPLE、两个物理节点、每节点一个 rank/GPU 与 M1 一致，不注入故障。16 B、16 KiB、4 MiB 各运行三次，第 k 次两端输入分别全为 `1+k`、`2+k`，预期输出全为 `3+2k`。
+
+M2 通过要求：两侧九次结果均正确，每 rank/op 恰有一条 completion，实际 channel/peer/消息大小一致；至少一个操作有周期中间窗口；丢失为零，错误、不支持形式或缺证使核对失败。采样周期初值 10 μs，Proxy 每次进度回调检查是否到期，最终状态强制保存。进度未变仍保存到期快照；这不是独立定时线程，调度延迟会使间隔大于设定周期。后续软件延迟必须让进度回调继续运行。若正常运行太短而没有中间窗口，如实拒绝该次 M2 验收，再根据实际数据调整周期/消息量。
+
+构建链：
+
+```text
+固定 NCCL 2.21.5 原源码包
+  → prepare_m2.py：校验文件，解出新副本，应用 patch，复制两个 host 源文件
+  → build_m2.py：make 调用 g++ / nvcc，链接成 libnccl.so.2.21.5
+  → build.sh：g++ 编译原生 AllReduce 程序，链接指定库
+  → run_m2.py：两端加载同一插桩库，实际通信并逐元素检查
+  → Proxy 线程退出后导出 → verify_capture.py 核对 → rank0 打一个结果包
+```
+
+`nccl-2.21.5-m2.patch` 修改上游调度、Proxy、NET 和 Makefile 中的调用位置；`mycroft_m2.cc` 读取真实字段、记录实际 launch stream 上的 CUDA event，并检查 abort/async error；`operation_trace.cpp` 负责预分配内存、计数与停止后导出。所有新增实现由本项目独立编写，没有复制 Mycroft 实现。包内 NVIDIA 源码及 `LICENSE.txt` 来自固定 commit `ab2b89c4c339bd7f816fbc114a4b05d386b66290`，按其许可证保留；archive 仅包含构建所需源码、makefiles、扩展头及许可证，不含上游发行包目录。
+
+只有两个新增 CPU 源文件使用 C++17；共享 adapter 头保持 C++11 兼容，GPU 编译参数沿用上游。新增成员在 host Proxy 对象中，不修改 GPU work 格式。原始 `third_party/nccl` 保持干净；M2 的 manifest 明确 `source_clean=no`，不能套用 M1 的 clean-source 检查或旧库 hash。
+
+依赖：构建需要 `python3`、`git`、`make`、`g++`、`readelf` 和 CUDA 12.5 devel 的 `nvcc`、头文件、静态 CUDA runtime；不需要 GPU，不依赖 CMake、PyTorch 或 pip 包。`RDMA_CORE=0` 使用 NCCL 自带的动态 verbs 包装，编译不新增 verbs 开发包。真实运行使用 M1 已验证的镜像，仍需要 `libibverbs1`、provider、GPU 驱动与实际 GPU/RDMA 资源。
+
+来源核对分三层：上传 manifest 保存原源码包/patch/新增文件 hash；构建记录保存实际命令、准备后源码 hash 和新库 hash；运行再检查实际加载路径/版本/hash。通用记录器自身不具备核验 NCCL 的能力，所以 `capture-manifest.json` 和原始 Event 的 source 始终标为未验证；adapter manifest 是生产端观测声明，只有离线核对器结合构建、连接、数值和 raw/Event 对账后才给出技术检查结果，不原地改写证据。completion 是本地整体操作的 CPU 观测时刻，不是精确 GPU 时间，也不是跨 rank 的全局完成。
+
+### 上传与运行
+
+首轮 `m2-capture-r1` 的退出码 1 来自物理节点核对：两侧各九次数值检查正确，adapter 无错误且记录零丢失，独立核对采集身份、进度及 completion 通过；两侧 DMI 和内核启动标识均相同，不能算双物理节点实验。NCCL 2.21.5 的 `getHostHash()` 包含 hostname，因此两个容器的不同 hostname 也可能使 NCCL 日志显示 `nNodes 2`，该数字不能替代物理节点证据。保留 r1，下一轮须实际落在不同物理 Node，两侧同时使用新采集编号；沿用已有上传包和 `m2-build-r1/nccl/`，不重复构建。详细证据仍记录在当前计划。
+
+2026-10-03 返回的 `m2-build-r1.tar.gz` 已通过来源离线复核：插桩库编译、指定路径加载、版本 `22105` 和三个采集接口导出检查均成功；构建作业本身为 `gpu_execution=NOT_RUN`。r2 普通用户运行在 CQ 创建时报 ENOMEM，随后 SIGSEGV；两侧改用 root、复用原包和库的 r3 已成功，双节点采集和本地技术核对通过，详细证据与 hash 记录在[当前计划的 M2 状态](../../../docs/plans/Mycroft_26日开发路线图.md#m2最小-completionstate-log)。r2/r3 对应的 kernel boot 标识相同，memlock 均为 64 KiB；不能解释成限制被提高，也未直接测得有效 capabilities。已有上传包和远端 `m2-build-r1/nccl/` 保留，无需重复构建或重跑。r2 的两个 null DMI 标识表示不可读取；r3 已读取到不同的 DMI 和 boot 标识。
+
+本地只生成一个上传包：
+
+```bash
+python3 cluster/crater/scripts/package_m2.py
+```
+
+将 `.build/m2-upload/m2-experiment.tar.gz` 上传到共享目录中的 `M2/`。启动命令会在容器临时目录解压，不需要手工解压或批量上传。下面的 `<共享挂载点>` 替换为 Crater 用户目录，避免在公开文档写个人绝对路径。
+
+以下 CPU 构建已完成，当前重试无需执行。首次从零准备时创建 CPU 作业（Custom 类型、2 CPU、8 GiB、0 GPU、不申请 RDMA），复用 CUDA 12.5 开发镜像，工作目录设为 `<共享挂载点>/M2`，命令：
+
+```bash
+bash -lc 'set -e
+m2_tmp=$(mktemp -d /tmp/m2-upload.XXXXXX)
+tar -xzf m2-experiment.tar.gz -C "$m2_tmp"
+python3 "$m2_tmp/m2-experiment/cluster/crater/scripts/build_m2.py" --work-dir "$PWD/m2-build-r1" --jobs 2'
+```
+
+成功后插桩库位于 `m2-build-r1/nccl/`。源码副本与对象文件在容器临时目录生成，结束后清理；共享目录保留最终共享库、头文件和证据，不保存不需要的静态库。失败时只下载 `m2-build-r1.tar.gz`，由 Codex 检查编译证据，不逐个下载中间文件。新工作目录及结果包不得已存在；保留旧结果并选新编号。
+
+用户已确认当前 Crater 的 PyTorch 双 Role 页面只有整个作业共用的节点白名单，它不能强制两侧分开；Custom 单机批处理页面同时支持 RDMA 和节点白名单。因此下一轮用两个 Custom 作业共同启动一轮 M2，分别固定到不同物理节点。只调整调度方式；已有 runner 按显式 rank 参数启动，通过共享目录交换 NCCL ID，不依赖 PyTorch 服务。跨作业实际通信与双节点证据仍由本轮核对，不能因页面允许配置就预先宣称通过。
+
+| 配置 | rank0 Custom 作业 | rank1 Custom 作业 |
+|---|---|---|
+| 副本数 | 1 | 1 |
+| 资源 | 2 CPU、8 GiB、1 V100、1 RDMA | 相同 |
+| 节点白名单 | 只选节点 A | 只选不同的节点 B |
+| 镜像 | M1 已验证的 CUDA 12.5 RDMA 运行环境 | 相同 |
+| RDMA 拓扑 | 两节点均支持的同一 IB 拓扑 | 相同 |
+| 用户空间挂载点 | `<共享挂载点>` | 相同 |
+| 工作目录 | `<共享挂载点>/M2` | 相同 |
+
+用户确认 r2 两侧 Custom Shell 均为普通用户，且页面支持 root。已完成的 r3 对照两侧均选择 Bash 的 root 身份，资源、固定节点及库保持原配置；CQ 错误消失、初始化正常返回、采集正常启动。root 不等于有效 `IPC_LOCK`，具体权限原因未直接测量。以下保留已执行 r3 的单行启动示例；当前无需重跑，未来再次运行须两侧同时换新编号。启动框不再外包跨行的 `bash -lc` 单引号字符串；已有报错 `zsh:5: unmatched` 表明收到的启动文本有单引号未闭合，不能靠换节点解决。单行中的 `&&` 保证前一步失败时不启动后一步。这里只核对本地 Bash/POSIX shell 语法，本地未安装 zsh；原始远端接收到的完整命令尚未取得，因此不把复制遗漏或页面拆行的具体原因写成已确认。
+
+rank0 命令：
+
+```bash
+m2_tmp=$(mktemp -d /tmp/m2-upload.XXXXXX) && tar -xzf m2-experiment.tar.gz -C "$m2_tmp" && python3 "$m2_tmp/m2-experiment/cluster/crater/scripts/run_m2.py" --rank 0 --run-dir "$PWD/m2-capture-r3" --nccl-root "$PWD/m2-build-r1/nccl" --peer-timeout 900
+```
+
+rank1 命令：
+
+```bash
+m2_tmp=$(mktemp -d /tmp/m2-upload.XXXXXX) && tar -xzf m2-experiment.tar.gz -C "$m2_tmp" && python3 "$m2_tmp/m2-experiment/cluster/crater/scripts/run_m2.py" --rank 1 --run-dir "$PWD/m2-capture-r3" --nccl-root "$PWD/m2-build-r1/nccl" --peer-timeout 900
+```
+
+尽快连续提交两个作业，不等待一侧完成再提交另一侧。两侧等待就绪的上限设为 900 秒，以容纳分别提交与调度的间隔；它不能解决节点资源不足造成的长期排队，原生通信子进程的执行上限仍为 240 秒。使用相同的新 run-dir；rank0 发布配置和 NCCL unique ID，两侧交换就绪状态再通信。rank0 完成或收集失败结果后打出 `m2-capture-r3.tar.gz`，只下载此文件。本地接收目录为 `.build/m2-download/`，Windows 从 `\\wsl.localhost\Ubuntu-22.04` 进入仓库同名目录。镜像若要求 `/crater-start.sh`，沿用已成功的包装方法，不改为 torchrun。
+
+`m2-build-r1/nccl/` 继续读取复用；两侧临时解包和 workload 构建分别使用独立临时目录，日志/采集分别写入 `rank0/`、`rank1/`。保留首轮 `m2-capture-r1` 与结果包。已完成的两作业共同使用 r3；再次重跑时两侧一起换新采集编号，不在已有目录重试或覆盖。平台提供失败自动重启选项时应关闭。rank0 原子创建运行目录及配置，结果包也拒绝覆盖。现有配置没有平台作业身份绑定：若误用只留下配置的旧目录，rank1 可能读取旧配置再等待超时，因此目录拒绝覆盖不能代替每轮使用新目录。
+
+本地已对现有上传包模拟检查两侧启动先后、双 rank0/双 rank1 竞争，以及旧目录、旧结果包和完成后重复启动的处理；也确认了上述旧配置限制。模拟替代了 GPU 与编译子进程，只验证启动协调和文件保护，不作为 GPU 采集证据。本次命令和说明更新不改变插桩代码，不需要重新上传已有包或重编译库。
+
+真实包解开后，本地复核命令：
+
+```bash
+python3 instrumentation/nccl-2.21.5/day16/verify_capture.py <解包目录>/m2-results
+```
+
+预期打印两侧 completion/sample/window/loss 信息及 `m2_technical_checks=PASS`；这表示技术证据通过，用户观察关键结果后才更新 M2 验收。当前 r3 的 CUDA 构建来源、双节点 GPU 通信、采集及字段对账已通过；完整 M2 验收待用户复核。
 
 ## 框架职责与实现边界
 
-目标：复用已搭建接口、源码观测边界、验证入口及单文件结果传输，为 M2 的目标 NET 路径采集服务。当前下一步是 M1，不能继续把无 Proxy 的 P2P 兼容扩展作为前置任务。
+目标：将目标 NET 路径的操作身份、中间进度和本地整体完成组织成可核对的记录，使后续分析能区分“GPU 尚未准备”“请求尚未提交”“网络尚未完成”。记录器及接入代码已实现，真实 CUDA 构建与加载、双节点 GPU 运行及技术核对均已通过，完整 M2 验收待用户复核。
 
-输入：固定 NCCL 2.21.5 源码、Day15 原生 AllReduce workload 及已取得的真实选择日志。M2 计划输出：同一操作的身份/channel/peer 关联、基于同进程单调时钟的 Event v2 completion、周期 state log、必要接收端证据、构建来源和运行状态；本次仅提供这些输出的接口骨架及打包工具。
+输入：当前记录器接收结构化 C++ 记录和调用者提供的观测 ns；真实适配使用固定 NCCL 2.21.5、原生 workload 与 M1 已验证 NET/IB 路径。M2 最终输出为身份/channel/peer 关联、基于同进程单调时钟的 completion、周期 state、必要接收证据、构建来源及运行状态。CPU fixture 的字段是手写数据，只验证记录器。
 
 最小知识：一次 collective 可拆到多个 channel；API 返回和 Proxy 子任务完成与整个本地 collective 完成有不同语义；单调时间在各进程内使用；operation 逻辑字节数与单个 slice 的传输大小不同。
 
-框架检查命令见下方“本地检查”；预期为接口语法和打包测试通过、真实核对入口明确返回未实现。M2 最终验收必须来自目标路径的项目修改版 NCCL：两个 rank、普通连续多个操作、实际多 channel 身份、时间/大小正确、数值结果正确，完成条件有可追溯的真实依据，并包含周期 state log 与必要对端状态。具体五步及完成标准只在路线图定义。
+框架检查命令见下方“本地检查”；预期为 CPU 记录器、契约、来源核对负例和真实源码打包/patch 准备检查通过。M2 最终验收必须来自目标路径的项目修改版 NCCL：两个 rank、普通连续多个操作、实际多 channel 身份、时间/大小正确、数值结果正确，完成条件有可追溯的真实依据，并包含周期 state log 与必要对端状态。具体五步及完成标准只在路线图定义。
 
 ## 文件和职责
 
 ```text
 instrumentation/nccl-2.21.5/day16/
-├── include/operation_trace.h  # key、begin、channel、completion 与状态接口
-├── src/operation_trace.cpp    # 采集和导出待实现，不触碰 NCCL 源码
-├── verify_capture.py         # 复用 Event v2 格式检查，完整真实核对待实现
-├── check_framework.sh        # 本地 C++ 语法与 Python schema 导入检查
-└── tests/test_result_bundle.py
+├── include/operation_trace.h  # 身份、连接、发送/接收、plan、采集生命周期接口
+├── src/operation_trace.cpp    # 有界并发写入、周期辅助、关联检查和停止后导出
+├── verify_capture.py         # 构建/运行来源及 raw/Event/应用操作对账
+├── nccl_adapter/             # NCCL host hook 与可复查 patch
+├── check_framework.sh        # CPU 记录器、schema、契约和打包检查
+└── tests/                    # contract/runtime/bundle 测试及明确标记的 CPU fixture
 
 cluster/crater/scripts/package_day16_results.py
 ```
 
 `OperationKey` 包含 `comm_hash`、`op_seq_candidate` 和 rank。`op_seq_candidate` 尚未确认，M2 须动态验证普通 NET/IB 操作的跨 rank 对应；Graph replay 不受支持。`record_channel_membership()` 将同一个 key 与各 channel 关联；operation 级 completion 的 Event v2 `context.channel` 为 null。
 
-`record_operation_begin()` 保存操作逻辑大小与开始时间；`record_operation_completion()` 必须由经过确认的本地整个操作完成观测点调用。`export_event_v2()` 在 workload 停止采集后导出，begin 与 end 使用同一进程单调时钟。它们是进程内草案；共享内存 ABI 已移出当前执行范围。
+Event 的 collective 名称沿用仓库现有 `all_reduce`，进度与 completion 使用 `nccl_monotonic_ns`；来自 E02 的 tick 即使格式合法，也不能作为 M2 实测日志。
 
-M2 热路径实现必须写入预分配的有界内存，不格式化 JSON、不执行阻塞文件 I/O；缓冲区满时报告 dropped。当前未实现状态是显式返回值，不能忽略后继续声称已采集。
+`record_operation_begin()` 保存操作逻辑大小与开始时间；`record_operation_completion()` 必须由经过确认的本地整个操作完成观测点调用。begin 与 end 使用同一进程单调时钟；`record_plan_binding()` 记录实际单操作 plan 和执行 stream，completion 引用相同编号。调用 completion 前必须检查该 stream 上 CUDA event 成功、abort 未请求和异步错误状态成功。编号只在本进程内有效，不能导出指针冒充跨 rank 身份。
 
-代码 TODO 对应 M2 的具体缺口：预分配与 dropped 统计、目标 NET 身份/channel/peer、可靠整体 completion、周期进度与单位、后台或受控停止后导出及真实证据核对。现有头文件仅覆盖 begin/channel/completion 草案，尚无 state/peer 采集接口；计划要求已明确，接口需在 M2 实现时按实际源码与动态证据补齐。目录名 `day16/` 和既有工具名保留以兼容调用，不表示继续旧逐日路线。
+`record_peer_connection()` 将 operation/channel 与 communicator peer、send/recv 方向和实际 NET/IB 连接绑定；不能未经转换使用 transport 的 `tpRank`。两端使用同一 capture ID 与 `commHash` 形成 communicator ID，按操作、channel 和 peer/direction 对账；不直接比较两端的本地 connection ID。
+
+| 记录 | 字段/含义 | 后续用途 |
+|---|---|---|
+| `SendProgress` | `gpu_ready_steps`、`transmitted_steps`、`done_steps`、`nsteps` | readiness 首次成立、isend 非空 request、网络 test 完成的累计进度 |
+| `ReceiveProgress` | `posted_steps`、`received_steps`、`transmitted_steps`、`done_steps` | irecv 非空 request、接收完成、flush 就绪后向 GPU 发布、GPU 消费确认 |
+| 两类状态共有 | 实际 channel/connection、观测 ns、step base、slice steps、注册缓冲区标记 | 保留来源与单位；step base 不加进 operation-relative 进度 |
+| `CaptureConfig` | capacity、sample period ns | 初始化预分配；周期到期即采样，包括进度未变的窗口 |
+| `CaptureStats` | phase、recorded、dropped、invalid、unsupported | 停止后的一致统计；无效调用不改写输出 |
+
+`normalize_send_steps()` 已实现普通发送侧 step→slice 格式检查。例如 `(nsteps, ready, transmitted, done)=(16,8,6,4)`、`slice_steps=2` 对应 Event `(total_chunks,gpu_ready,rdma_transmitted,rdma_done)=(8,4,3,2)`。所有量必须是非负整数且整除同一个 slice steps，满足 `done≤transmitted≤ready≤nsteps`，不静默舍入。这里的 `chunks` 是归一化 Proxy slice 单位，不能直接当 Ring 算法数据块或逻辑字节数。
+
+上述例子是格式说明，不是实测。NCCL 注册缓冲区路径可在运行中增长 `nsteps`，且 GPU/网络计数可能不一一对应；接口保留该标记，当前记录器返回 `Unsupported` 并计数，转换器也拒绝其未经验证的映射。本轮限定普通未注册缓冲区，不增加注册路径实验。接收状态独立导出，现有发送侧 Event payload 不承载其不同语义；固定源码的 sub 结构有 `flushed` 字段，但目标 NET 路径未独立更新它，因此不把它作为有效采集计数。
+
+生命周期已实现：`initialize_capture(config)` → 各 record/sample 入口 → 所有生产者退出 → `stop_capture()` → 读取统计 → `export_capture(capture_id, output_directory)`。初始化时分配所有记录槽；多个生产者用无锁原子预约独立槽，不等待 reader、不覆盖旧记录。记录追加到运行末尾，容量耗尽后返回 `Dropped` 并计数；重新初始化会清空上一轮内存，因此需要先导出。此实现要求 Linux 64 位无锁原子。
+
+`sample_send_progress()` / `sample_receive_progress()` 使用生产者独占的 `SamplingState`：首次观察即记录，周期未到返回 `Skipped`，周期到期即使累计值不变也记录；时钟倒退返回 `InvalidArgument`。每个 operation/connection/direction 用独立 state。它们不创建线程、不读取时钟；adapter 在持续调用的 Proxy 回调中取得 CLOCK_MONOTONIC，同进程应用阶段也使用该时钟。调用者必须检查返回状态。
+
+停止和导出由控制线程串行调用，且所有生产者已经退出/静止；不允许一边写一边 stop 或重新初始化。`read_capture_stats()` 只在停止后提供一致结果。JSON 格式化、关联索引和文件写入全部在停止后执行，不进入热路径。进程崩溃且尚未导出时可能缺证。
+
+导出要求新目录且父目录已经存在，一个进程只承载一个 rank/communicator；run_m2.py 收集两个 rank 的独立输出并打包。`channel-map.jsonl` 保留 begin、channel、peer，`plan-map.jsonl` 保留 plan 与原始 completion，`send-/recv-rankN.jsonl` 保留 step 单位原始计数，`rankN.jsonl` 为归一化发送进度和 completion Event。缺失/重复 begin、错误 plan/stream、缺少 peer/direction 或累计计数倒退时，原始记录保留；不能可靠关联的 Event 不生成，manifest 的 `association_errors` 增加。导出遇到 I/O 错误返回 `IoError` 并可能保留部分文件，完整 manifest 最后写；已有目录拒绝覆盖。
+
+manifest 的 `local_contract_valid` 只描述本记录器的格式/关联检查；丢失、无效、不支持或关联错误都会使其为 false。无论 CPU 检查是否通过，当前固定写入 `nccl_adapter_verified=false`、`completion_observation_verified=false`、`diagnostic_eligible=false` 和 `time_source=caller_supplied_unverified`，不把手写观测伪装成真实 NCCL 证据。
+
+当前单 RING 路径要求每个 operation/channel 恰有一个 send 和一个 recv peer 映射。重复或多个同方向连接会报告缺证，不把多个连接的进度混进同一个 channel Event；adapter 检查实际 NET transport 与 communicator peer，真实运行仍须验证。
+
+M2 剩余验证：操作/channel/peer 身份、实际周期窗口、计数单位与实际 stream 完成观测。接入、来源记录、结果合并及核对入口已有代码，CPU 检查不能代替这些实测。目录名 `day16/` 和既有工具名保留以兼容调用，不表示继续旧逐日路线。
 
 ## 已知路径限制：P2P 不必有 NET Proxy 进度
 
@@ -94,7 +211,7 @@ Graph capture 使 plan.persistent 为 true。`ncclLaunchPrepare()` 在这条分�
 
 后续完成观测应覆盖整个目标操作的 GPU 工作及全部参与 channel，并和身份关联；必须处理 abort/error，避免把提前退出当成成功完成。CPU 观测时间可用于本进程时差，但要明确是观测时刻，不能伪称精确 GPU 结束时间。`ncclLaunchFinish()` 和 Proxy request completion 同样不能直接替代这个条件。
 
-尚未确定完成采集实现，也未修改 NCCL。上述 Graph/P2P 结论保留为支持范围限制，本版不再要求同时覆盖这些路径。下一项是 M1 实际 NET/RDMA 验证，随后 M2 在普通 RING/SIMPLE 路径确认身份与 completion/state 语义。
+adapter 已实现普通单操作 plan 的实际 launch stream event 观测；仅以 patch 修改独立副本，不改原始 checkout。上述 Graph/P2P 结论保留为支持范围限制。M1 实际 NET/IB 证据已取得，M2 仍须动态确认身份与 completion/state 语义。
 
 ## 本地检查
 
@@ -102,19 +219,36 @@ Graph capture 使 plan.persistent 为 true。`ncclLaunchPrepare()` 在这条分�
 
 ```bash
 bash instrumentation/nccl-2.21.5/day16/check_framework.sh
-python3 -m unittest discover -s instrumentation/nccl-2.21.5/day16/tests -p 'test_*.py' -v
 ```
 
-框架检查应打印 `day16_framework=PASS scope=CPU_syntax_and_schema_import_only`、`day16_capture=NOT_IMPLEMENTED`、`day16_gpu_acceptance=NOT_RUN`。打包测试使用明确标记的文件 fixture，只验证传输工具，不产生 NCCL 验收证据。
+框架检查运行契约/记录器/打包测试并打印 `day16_framework=PASS scope=CPU_recorder_schema_and_contract_tests_only`、`day16_capture=CPU_RECORDER_ONLY`、`day16_nccl_adapter=PATCH_PRESENT_CUDA_BUILD_NOT_RUN`、`day16_gpu_acceptance=NOT_RUN`。其中 CPU runtime 编译并运行实际 C++ 记录器，覆盖多生产者、容量耗尽、进度不变的周期快照、非法状态/计数和导出缺证；手写记录不产生 NCCL 验收证据。
 
-核对入口尚未实现，可观察其明确退出状态：
+上述 `CUDA_BUILD_NOT_RUN` 仅描述本地框架检查没有执行 CUDA 构建；它不读取远端构建结果。已取得的 Crater 构建证据见本文“上传与运行”及当前计划，GPU 采集仍未验证。
+
+需要自行观察保留的两个相同快照时，可运行明确标记的 CPU fixture：
+
+```bash
+mkdir -p .build/m2-cpu
+g++ -std=c++17 -pthread -Wall -Wextra -Wpedantic -Werror \
+  -I instrumentation/nccl-2.21.5/day16/include \
+  instrumentation/nccl-2.21.5/day16/src/operation_trace.cpp \
+  instrumentation/nccl-2.21.5/day16/tests/capture_fixture.cpp \
+  -o .build/m2-cpu/capture-fixture
+.build/m2-cpu/capture-fixture normal .build/m2-cpu/normal-1
+cat .build/m2-cpu/normal-1/trace/rank0.jsonl
+cat .build/m2-cpu/normal-1/capture-manifest.json
+```
+
+首两条 progress 时间分别为 120、130，归一化 `(ready,transmitted,done)=(4,3,2)` 不变，两条均保留；随后进度推进，最后有一条手写 completion。目录已存在时请选择新的输出名。这说明停滞窗口没有被“只记录变化”丢掉，不证明真实 GPU/NIC 停滞。
+
+真实核对入口要求 M2 构建和实际运行证据；给旧 M1 日志或 CPU fixture 会拒绝，不用它们制造通过：
 
 ```bash
 PYTHONPATH=src python3 instrumentation/nccl-2.21.5/day16/verify_capture.py \
-  .build/day16-upload/day16-results
+  results/samples/e06/m1
 ```
 
-当前应返回 2 并打印 `capture_verification=NOT_IMPLEMENTED`，不写结果、不把任意合法 Event JSON 当成真实完成证据。后续要同时核对 patch/build hash、观测语义、丢失计数、workload 结果与逐操作身份，不能只做 JSON 格式验证。
+该负例应返回 1 并说明需要 M2 provenance。真实核对同时检查 patch/build hash、观测声明、丢失计数、workload 结果与逐操作身份，不把合法 Event JSON 当成真实完成证据。
 
 ## 单个结果包与接收目录
 
@@ -129,7 +263,9 @@ PYTHONPATH=src python3 instrumentation/nccl-2.21.5/day16/verify_capture.py \
 ├── capture-manifest.json
 ├── analysis.txt
 ├── workload/{run.log,rank0.log,rank1.log}
-├── trace/{rank0.jsonl,rank1.jsonl,channel-map.jsonl}
+├── trace/{rank0.jsonl,rank1.jsonl,send-rank0.jsonl,send-rank1.jsonl}
+├── trace/{recv-rank0.jsonl,recv-rank1.jsonl}
+├── trace/{channel-map.jsonl,plan-map.jsonl}
 └── nccl-build/{build-manifest.txt,run-status.txt,verification.log,saved-verification.log}
 ```
 

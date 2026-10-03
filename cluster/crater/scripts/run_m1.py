@@ -66,7 +66,7 @@ def run(arguments, log, timeout, environment=None):
                     child.wait()
 
 
-def execute(rank, directory, nccl_root, config, timeout):
+def execute(rank, directory, nccl_root, config, timeout, *, capture_m2=False):
     folder = directory / f"rank{rank}"
     folder.mkdir()  # 拒绝重试覆盖本次 rank 的已有结果。
     status = {"rank": rank, "run_id": config["run_id"], "exit_code": 1}
@@ -74,6 +74,12 @@ def execute(rank, directory, nccl_root, config, timeout):
     try:
         environment = dict(os.environ, **SETTINGS)
         environment.pop("NCCL_DEBUG_FILE", None)
+        # An inherited environment must not silently enable instrumentation in M1.
+        for name in ("MYCROFT_M2_ENABLE", "MYCROFT_M2_CAPTURE_ID", "MYCROFT_M2_OUTPUT"):
+            environment.pop(name, None)
+        if capture_m2:
+            environment.update(MYCROFT_M2_ENABLE="1", MYCROFT_M2_CAPTURE_ID=config["run_id"],
+                               MYCROFT_M2_OUTPUT=str(folder / "capture"))
         status["probe_exit_code"] = run(
             [sys.executable, str(ROOT / "cluster/crater/probes/rdma_probe.py"), "--rank", str(rank)],
             folder / "probe.json", 120, environment)
@@ -84,6 +90,9 @@ def execute(rank, directory, nccl_root, config, timeout):
         if digest != config["expected_sha256"]:
             raise RuntimeError("library differs from the independently verified expected SHA256")
         shutil.copyfile(nccl_root / "build-manifest.txt", folder / "build-manifest.txt")
+        if capture_m2:
+            for name in ("m2-build.json", "m2-source-manifest.json"):
+                shutil.copyfile(nccl_root / name, folder / name)
         write_json(folder / "environment.json", {"rank": rank, "library_path": str(library),
                    "library_sha256": digest, "settings": SETTINGS,
                    "optional_network_settings": {key: environment[key] for key in

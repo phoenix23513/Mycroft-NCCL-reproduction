@@ -61,9 +61,7 @@ echo "[check] Replay sanitized real M1 NET/IB evidence (offline; no fresh GPU ru
 python3 "$project_root/workloads/minimal_allreduce/verify_m1.py" \
   "$project_root/results/samples/e06/m1"
 
-echo "[check] Day16 capture framework (CPU only; collection not implemented)"
+echo "[check] M2 recorder, evidence contracts and source delivery (CPU only; CUDA build not run)"
 bash "$project_root/instrumentation/nccl-2.21.5/day16/check_framework.sh"
-python3 -m unittest discover \
-  -s "$project_root/instrumentation/nccl-2.21.5/day16/tests" -p "test_*.py"
 
 echo "[check] All repository checks passed"
