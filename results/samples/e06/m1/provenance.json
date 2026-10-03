@@ -1,0 +1,10 @@
+{
+  "evidence_kind": "sanitized_excerpt_of_real_Crater_run; not_synthetic_fixture",
+  "source_archive_sha256": "22262421a9dfdb765ac3e3e0fc64a7c0d5c6e6d336e25bd1f29e045f24feb59d",
+  "original_job_exit_code": 1,
+  "selection": "application fragments, init/node/transport, NCCL call and rank0 plan records; unrelated TRACE omitted",
+  "redactions": "paths, hostnames, process/thread IDs, GPU UUIDs, node hashes, communicator ID, pointers and peer addresses replaced by placeholders; required host/GPU/communicator equality or difference relationships preserved; process/thread and pointer identities not retained",
+  "unchanged": "operation/count/result/stage/time_ns, algorithm/protocol/channel count, library hash/source version, raw interleaving of retained application records",
+  "limits": "not_full_trace; not_for_Proxy_timing_analysis; later_fwrite_source_change_not_executed_in_this_run",
+  "formatting": "trailing whitespace removed from build-manifest lines only"
+}

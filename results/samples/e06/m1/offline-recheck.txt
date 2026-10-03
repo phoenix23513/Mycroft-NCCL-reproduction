@@ -1,0 +1,18 @@
+scope=sanitized_real_excerpt_offline_recheck; original_failure_preserved
+m1_technical_checks=PASS ranks=2 operations_per_rank=9 result_checks=18
+node_evidence=DISTINCT_DMI_IDENTIFIERS
+transport_connections=NET/IB/0
+rank=0 recovered_application_records=2 scope=complete_proxy_trace_insertions_only
+rank=1 recovered_application_records=5 scope=complete_proxy_trace_insertions_only
+selection_evidence=PASS scope=rank0_submitted_plan algorithm=RING protocol=SIMPLE
+operation,bytes,channels
+0,16,1
+1,16,1
+2,16,1
+3,16384,1
+4,16384,1
+5,16384,1
+6,4194304,2
+7,4194304,2
+8,4194304,2
+full_m1_acceptance=PENDING_USER_REVIEW

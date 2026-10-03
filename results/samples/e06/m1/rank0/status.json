@@ -1,0 +1,8 @@
+{
+  "rank": 0,
+  "run_id": "<RUN_ID>",
+  "exit_code": 0,
+  "probe_exit_code": 0,
+  "build_exit_code": 0,
+  "workload_exit_code": 0
+}

@@ -1,4 +1,5 @@
 #include "bootstrap.h"
+#include "device_binding.h"
 #include "result_check.h"
 
 #include <cuda_runtime.h>
@@ -8,8 +9,9 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
+#include <cstdio>
 #include <filesystem>
-#include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -17,6 +19,15 @@
 static_assert(NCCL_VERSION_CODE == 22105, "Day15 requires NCCL 2.21.5 headers");
 
 namespace {
+// NCCL debug.cc 同样以一次 fwrite 输出一条记录；共用 stdout 的 FILE 锁，
+// 避免 unitbuf 下多次 operator<< 写入被 Proxy TRACE 插在字段之间。
+void print_line(std::string record) {
+  record += '\n';
+  if (std::fwrite(record.data(), 1, record.size(), stdout) != record.size() ||
+      std::fflush(stdout) != 0)
+    throw std::runtime_error("cannot write application log");
+}
+
 void cuda_check(cudaError_t status) {
   if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 }
@@ -38,9 +49,11 @@ int integer(const char* text, int minimum, int maximum) {
 // time_ns 只用于本进程的阶段差值，不是 GPU 的精确执行时间。
 void mark(int rank, int operation, std::size_t count, const char* stage) {
   const auto now = std::chrono::steady_clock::now().time_since_epoch();
-  std::cout << "rank=" << rank << " operation=" << operation << " count=" << count
-            << " stage=" << stage << " time_ns="
-            << std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() << '\n';
+  std::ostringstream record;
+  record << "rank=" << rank << " operation=" << operation << " count=" << count
+         << " stage=" << stage << " time_ns="
+         << std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+  print_line(record.str());
 }
 
 void verify_library() {
@@ -51,11 +64,11 @@ void verify_library() {
     throw std::runtime_error("cannot identify the loaded NCCL library");
   const auto loaded = std::filesystem::canonical(info.dli_fname);
   const auto expected = std::filesystem::canonical(DAY15_EXPECTED_NCCL_LIBRARY);
-  std::cout << "requested_library=" << expected.string() << '\n'
-            << "loaded_library=" << loaded.string() << '\n'
-            << "nccl_version_code=" << version << '\n';
+  print_line("requested_library=" + expected.string());
+  print_line("loaded_library=" + loaded.string());
+  print_line("nccl_version_code=" + std::to_string(version));
   if (version != 22105 || loaded != expected)
-    throw std::runtime_error("loaded NCCL is not the specified Day14 library");
+    throw std::runtime_error("loaded NCCL is not the specified project-built library");
 }
 
 // 提交 Sum AllReduce；成功返回表示提交成功，完成由下一函数等待。
@@ -88,26 +101,27 @@ struct Runtime {
 }  // namespace
 
 int main(int argc, char** argv) {
-  std::cout << std::unitbuf;
-  std::cerr << std::unitbuf;
-  if (argc != 3 && argc != 4) {
-    std::cerr << "Usage: day15_allreduce RANK ID_FILE [ITERATIONS>=3]\n";
+  if (argc != 3 && argc != 4 && argc != 5) {
+    std::fputs("Usage: day15_allreduce RANK ID_FILE [ITERATIONS>=3 [--single-gpu-node]]\n", stderr);
     return 2;
   }
   int rank = -1;
   try {
     rank = integer(argv[1], 0, 1);
-    const int iterations = argc == 4 ? integer(argv[3], 3, 1000) : 3;
+    const int iterations = argc >= 4 ? integer(argv[3], 3, 1000) : 3;
+    const bool single_gpu_node = argc == 5;
+    if (single_gpu_node && std::string(argv[4]) != "--single-gpu-node")
+      throw std::invalid_argument("unknown execution mode");
     verify_library();
 
     int devices = 0;
     cuda_check(cudaGetDeviceCount(&devices));
-    if (devices < 2) throw std::runtime_error("Day15 requires two visible GPUs in one Pod");
-    cuda_check(cudaSetDevice(rank));
+    const int device = day15::select_device(rank, devices, single_gpu_node);
+    cuda_check(cudaSetDevice(device));
     cudaDeviceProp properties{};
-    cuda_check(cudaGetDeviceProperties(&properties, rank));
-    std::cout << "rank=" << rank << " device=" << rank
-              << " gpu_name=" << properties.name << '\n';
+    cuda_check(cudaGetDeviceProperties(&properties, device));
+    print_line("rank=" + std::to_string(rank) + " device=" + std::to_string(device) +
+               " gpu_name=" + properties.name);
 
     ncclUniqueId id{};
     mark(rank, -1, 0, "bootstrap_begin");
@@ -115,7 +129,8 @@ int main(int argc, char** argv) {
       nccl_check(ncclGetUniqueId(&id));
       day15::publish_id(argv[2], &id, sizeof(id));
     } else {
-      day15::read_id(argv[2], &id, sizeof(id));
+      day15::read_id(argv[2], &id, sizeof(id), single_gpu_node ?
+                     std::chrono::seconds(120) : std::chrono::seconds(30));
     }
     mark(rank, -1, 0, "bootstrap_return");
 
@@ -147,8 +162,10 @@ int main(int argc, char** argv) {
         mark(rank, operation, count, "stream_sync_return");
         cuda_check(cudaMemcpy(output.data(), runtime.recv, bytes, cudaMemcpyDeviceToHost));
         day15::verify_result(output, expected);
-        std::cout << "rank=" << rank << " operation=" << operation
-                  << " count=" << count << " expected=" << expected << " result=PASS\n";
+        std::ostringstream record;
+        record << "rank=" << rank << " operation=" << operation
+               << " count=" << count << " expected=" << expected << " result=PASS";
+        print_line(record.str());
       }
       cuda_check(cudaFree(runtime.send));
       runtime.send = nullptr;
@@ -156,10 +173,10 @@ int main(int argc, char** argv) {
       runtime.recv = nullptr;
     }
     runtime.finished = true;
-    std::cout << "rank=" << rank << " operations=" << operation << " status=PASS\n";
+    print_line("rank=" + std::to_string(rank) + " operations=" + std::to_string(operation) + " status=PASS");
     return 0;
   } catch (const std::exception& error) {
-    std::cerr << "rank=" << rank << " status=FAILED error=" << error.what() << '\n';
+    std::fprintf(stderr, "rank=%d status=FAILED error=%s\n", rank, error.what());
     return 1;
   }
 }

@@ -4,7 +4,7 @@
 
 目标：在同一个 Pod 的两张 GPU 上，用两个原生 C++ 进程运行 Day14 构建的 NCCL 2.21.5。输入是 Day14 产物目录和迭代次数；输出是每个 rank 的库来源、应用阶段标记和数值检查结果。
 
-执行范围、顺序和验收以[当前计划](../../docs/plans/Mycroft_26日开发路线图.md)为准。本文记录已完成的 Day15 同机双 GPU 基线；M1 双节点入口尚未实现。现有 `device=rank`、同 Pod 文件 bootstrap、同时启动两个 rank 的脚本和离线核对只支持此基线，不能直接在每节点一张 GPU 的条件下使用或作为 NET/RDMA 验收。
+执行范围、顺序和验收以[当前计划](../../docs/plans/Mycroft_26日开发路线图.md)为准。本文记录已完成的 Day15 同机双 GPU 基线；默认 `device=rank`、同 Pod bootstrap、同时启动两个 rank 的 `run.sh` 和旧离线核对只支持此基线。M1 已新增显式 `--single-gpu-node` 模式与独立双 Role runner/核对入口，真实 NET/RDMA 运行证据及离线核对说明见 [M1 实验 README](M1_README.md)；当前技术证据通过，最终验收等待用户确认。
 
 ## 程序结构
 
@@ -20,7 +20,7 @@
 - `verify_results.py`：在本地离线核对真实结果，输出明确的失败原因，并可导出逐操作阶段耗时 CSV。默认核对功能基线，`--require-selection` 额外检查 rank0 的逐操作提交计划；用户还需理解这些观测的语义。
 - `cluster/crater/scripts/package_day15_trace.py`、`run_day15_trace.sh`：打包同一固定 NCCL 源码，在 `/tmp` 编译独立的 `TRACE=1` 库，保存构建证据并运行相同 workload，最后核对逐操作选择日志。
 
-本次固定 `device=rank`，要求两个进程均能看到同样的两张 GPU。rank 0 生成唯一 ID，rank 1 读取该 ID；两个进程并发调用 `ncclCommInitRank`。
+Day15 默认模式固定 `device=rank`，要求两个进程均能看到同样的两张 GPU。rank 0 生成唯一 ID，rank 1 读取该 ID；两个进程并发调用 `ncclCommInitRank`。
 
 ## 程序做什么
 

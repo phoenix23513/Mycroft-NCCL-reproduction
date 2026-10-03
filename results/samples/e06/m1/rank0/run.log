@@ -1,0 +1,72 @@
+requested_library=<NCCL_ROOT>/lib/libnccl.so.2.21.5
+loaded_library=<NCCL_ROOT>/lib/libnccl.so.2.21.5
+nccl_version_code=22105
+rank=0 device=0 gpu_name=Tesla V100-SXM2-32GB
+rank=0 operation=-1 count=0 stage=bootstrap_begin time_ns=395111462600737
+rank=0 operation=-1 count=0 stage=bootstrap_return time_ns=395111467239425
+rank=0 operation=-1 count=0 stage=comm_init_begin time_ns=395111467270663
+NODE_A:1:1 [0] NCCL INFO Using network IB
+NODE_A:1:1 [0] NCCL INFO comm <PTR> rank 0 nRanks 2 nNodes 2 localRanks 1 localRank 0 MNNVL 0
+NODE_A:1:1 [0] NCCL INFO Channel 00/0 : 1[0] -> 0[0] [receive] via NET/IB/0
+NODE_A:1:1 [0] NCCL INFO Channel 01/0 : 1[0] -> 0[0] [receive] via NET/IB/0
+NODE_A:1:1 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] [send] via NET/IB/0
+NODE_A:1:1 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[0] [send] via NET/IB/0
+NODE_A:1:1 [0] NCCL INFO ncclCommInitRank comm <PTR> rank 0 nranks 2 cudaDev 0 nvmlDev 0 busId 1a000 commId <COMM_ID> - Init COMPLETE
+rank=0 operation=-1 count=0 stage=comm_init_return time_ns=395112829261211
+rank=0 operation=0 count=4 stage=api_begin time_ns=395112829638394
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 0 sendbuff <PTR> recvbuff <PTR> count 4 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1366.569759 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 1, count 4 (nbytes 16), usableChannel 1, maxBytesPerChannel 16, chunkCount 524288, lastChunkCount 1024, funcIndex 211, nThreads 96
+rank=0 operation=0 count=4 stage=api_return time_ns=395112832662350
+rank=0 operation=0 count=4 stage=stream_sync_return time_ns=395112842357338
+rank=0 operation=0 count=4 expected=3 result=PASS
+rank=0 operation=1 count=4 stage=api_begin time_ns=395112842520238
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 1 sendbuff <PTR> recvbuff <PTR> count 4 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1379.402341 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 1, count 4 (nbytes 16), usableChannel 1, maxBytesPerChannel 16, chunkCount 524288, lastChunkCount 1024, funcIndex 211, nThreads 96
+rank=0 operation=1 count=4 stage=api_return time_ns=395112842581495
+rank=0 operation=1 count=4 stage=stream_sync_return time_ns=395112842729582
+rank=0 operation=1 count=4 expected=5 result=PASS
+rank=0 operation=2 count=4 stage=api_beginNODE_A:1:1 [0] 1379.654572 ncclIbTest:1921 NCCL TRACE Got completion from peer <PEER_ADDR> with status=0 opcode=1 len=32546 wr_id=0 r=<PTR> type=1 events={0,1}, i=1
+ time_ns=395112842810335
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 2 sendbuff <PTR> recvbuff <PTR> count 4 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1379.696650 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 1, count 4 (nbytes 16), usableChannel 1, maxBytesPerChannel 16, chunkCount 524288, lastChunkCount 1024, funcIndex 211, nThreads 96
+rank=0 operation=2 count=4 stage=api_return time_ns=395112842868066
+rank=0 operation=2 count=4 stage=stream_sync_return time_ns=395112843071846
+rank=0 operation=2 count=4 expected=7 result=PASS
+rank=0 operation=3 count=4096 stage=api_begin time_ns=395112843520782
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 3 sendbuff <PTR> recvbuff <PTR> count 4096 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1380.407896 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 1, count 4096 (nbytes 16384), usableChannel 1, maxBytesPerChannel 16384, chunkCount 524288, lastChunkCount 2048, funcIndex 211, nThreads 288
+rank=0 operation=3 count=4096 stage=api_return time_ns=395112843585394
+rank=0 operation=3 count=4096 stage=stream_sync_return time_ns=395112845100675
+rank=0 operation=3 count=4096 expected=9 result=PASS
+rank=0 operation=4 count=4096 stage=api_begin time_ns=395112845233360
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 4 sendbuff <PTR> recvbuff <PTR> count 4096 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1382.118941 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 1, count 4096 (nbytes 16384), usableChannel 1, maxBytesPerChannel 16384, chunkCount 524288, lastChunkCount 2048, funcIndex 211, nThreads 288
+rank=0 operation=4 count=4096 stage=api_return time_ns=395112845298326
+rank=0 operation=4 count=4096 stage=stream_sync_return time_ns=395112845520390
+rank=0 operation=4 count=4096 expected=11 result=PASS
+rank=0 operation=5 count=4096 stage=api_begin time_ns=395112845612055
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 5 sendbuff <PTR> recvbuff <PTR> count 4096 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1382.489696 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 1, count 4096 (nbytes 16384), usableChannel 1, maxBytesPerChannel 16384, chunkCount 524288, lastChunkCount 2048, funcIndex 211, nThreads 288
+rank=0 operation=5 count=4096 stage=api_return time_ns=395112845661539
+rank=0 operation=5 count=4096 stage=stream_sync_return time_ns=NODE_A:1:1 [0] 1382.681025 ncclIbTest:1921 NCCL TRACE Got completion from peer <PEER_ADDR> with status=0 opcode=1 len=32546 wr_id=0 r=<PTR> type=1 events={1,1}, i=0
+395112845837879
+rank=0 operation=5 count=4096 expected=13 result=PASS
+rank=0 operation=6 count=1048576 stage=api_begin time_ns=395112853148106
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 6 sendbuff <PTR> recvbuff <PTR> count 1048576 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1390.041408 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 2, count 1048576 (nbytes 4194304), usableChannel 2, maxBytesPerChannel 2097152, chunkCount 524288, lastChunkCount 262144, funcIndex 211, nThreads 288
+rank=0 operation=6 count=1048576 stage=api_return time_ns=395112853219455
+rank=0 operation=6 count=1048576 stage=stream_sync_return time_ns=395112854279884
+rank=0 operation=6 count=1048576 expected=15 result=PASS
+rank=0 operation=7 count=1048576 stage=api_begin time_ns=395112857841974
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 7 sendbuff <PTR> recvbuff <PTR> count 1048576 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1394.730453 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 2, count 1048576 (nbytes 4194304), usableChannel 2, maxBytesPerChannel 2097152, chunkCount 524288, lastChunkCount 262144, funcIndex 211, nThreads 288
+rank=0 operation=7 count=1048576 stage=api_return time_ns=395112857908634
+rank=0 operation=7 count=1048576 stage=stream_sync_return time_ns=395112859195375
+rank=0 operation=7 count=1048576 expected=17 result=PASS
+rank=0 operation=8 count=1048576 stage=api_begin time_ns=395112862448757
+NODE_A:1:1 [0] NCCL INFO AllReduce: opCount 8 sendbuff <PTR> recvbuff <PTR> count 1048576 datatype 7 op 0 root 0 comm <PTR> [nranks=2] stream <PTR>
+NODE_A:1:1 [0] 1399.335103 addCBDCollToPlan:498 NCCL TRACE CBDColl enqueue coll AllReduce(ncclSum, ncclFloat32, RING, SIMPLE), nChannels 2, count 1048576 (nbytes 4194304), usableChannel 2, maxBytesPerChannel 2097152, chunkCount 524288, lastChunkCount 262144, funcIndex 211, nThreads 288
+rank=0 operation=8 count=1048576 stage=api_return time_ns=395112862510401
+rank=0 operation=8 count=1048576 stage=stream_sync_return time_ns=395112864030404
+rank=0 operation=8 count=1048576 expected=19 result=PASS
+rank=0 operations=9 status=PASS

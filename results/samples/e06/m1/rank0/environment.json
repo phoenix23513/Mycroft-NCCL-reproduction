@@ -1,0 +1,17 @@
+{
+  "rank": 0,
+  "library_path": "<NCCL_ROOT>/lib/libnccl.so.2.21.5",
+  "library_sha256": "e4437dd0b48e3ab426b17b394043a0d162f1c9040b32bcf34b5b866e6286132a",
+  "settings": {
+    "NCCL_NET": "IB",
+    "NCCL_NET_PLUGIN": "none",
+    "NCCL_IB_DISABLE": "0",
+    "NCCL_ALGO": "RING",
+    "NCCL_PROTO": "SIMPLE",
+    "NCCL_DEBUG": "TRACE",
+    "NCCL_DEBUG_SUBSYS": "INIT,ENV,GRAPH,COLL,NET",
+    "NCCL_MIN_NCHANNELS": "2",
+    "NCCL_MAX_NCHANNELS": "2"
+  },
+  "optional_network_settings": {}
+}

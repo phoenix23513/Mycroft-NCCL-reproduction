@@ -6,7 +6,7 @@
 - NCCL 目标版本：2.21.5
 - 最终目标：在真实 NCCL 2.21.5 双节点 RDMA 运行中，完成最小的日志采集、异常触发和依赖驱动 RCA 闭环
 - 执行规模：剩余工作按五个必做里程碑验收，不再要求逐项完成原 Day16—26；不承诺固定开发日数量
-- 当前状态：Day15 已完成并提交/push（`4638847`）。`day16/operation-completion` 分支已有采集接口、核对骨架和单文件结果打包工具，尚无插桩或真实采集。当前下一步是 M1：目标 NET/RDMA 路径验证
+- 当前状态：Day15 已完成并提交/push（`4638847`）。已有 Day16 采集接口与结果打包骨架，尚无插桩或真实采集。M1 补齐运行库后的 Crater 重试完成双节点 NET/IB AllReduce，原作业因日志交错导致核对失败，修复后的原始日志离线复核通过。M1 技术证据齐全，最终验收待用户确认。
 
 ## 1. 计划要解决的问题
 
@@ -543,11 +543,11 @@ workloads/minimal_allreduce/
 
 **最小知识与用户参与**：两个 Pod 不等于两个节点；用户能根据节点证据和 NET 日志判断走了哪条路径。Codex 准备命令、打包和解释，用户在 Crater 执行并复制一个结果包。
 
-**文件/接口**：复用 `workloads/minimal_allreduce/`、`cluster/crater/` 构建与打包工具；新增代码仅用于必要的双节点 bootstrap、环境核对和执行。当前尚无可直接运行的本里程碑作业包，准备后在实验 README 给出准确启动/验收命令。
+**文件/接口**：复用原生 workload 和有界结果打包；`run_m1.py` 每 Pod 启动一个 rank，`rdma_probe.py` 预检环境，`verify_m1.py` 核对真实来源、身份、网络和数值。新增显式单 GPU 模式，两侧通过同一新共享目录交换 ID/就绪状态，rank0 自动打一个结果包。运行前提、双 Role 配置和准确命令见 [M1 实验 README](../../workloads/minimal_allreduce/M1_README.md)。
 
 **验收**：两个 rank 所有元素正确、退出码为 0；项目 NCCL 版本/加载路径/hash 一致；两个真实物理节点；明确 NET/IB 和有效连接。缺少 RDMA 或节点资源时保留诊断包、标记环境阻塞；可做本地开发，但不能拿 Day15 P2P 或 Socket 顶替验收。
 
-**当前状态**：未验证。Day15 已完成同机 P2P/CUMEM 基线，仅可复用其 workload、环境和传输工具。当前分支已有 Day16 接口与打包骨架，不能据此声称 M1 已通过。
+**当前状态**：技术证据齐全，最终验收待用户确认。首轮缺少 `libibverbs.so.1`，停在资源预检；用户通过 Crater 派生镜像补齐运行库后，清理远端旧目标并复用了 r1 名称。重试归档 SHA256 为 `22262421a9dfdb765ac3e3e0fc64a7c0d5c6e6d336e25bd1f29e045f24feb59d`；两侧 probe/build/workload 均退出 0，各完成九次 AllReduce，项目 TRACE 库 hash 与独立构建一致，两个不同物理节点/不同 GPU、同一 communicator、NET/IB 双向连接证据齐全。rank0 的实际计划为 RING/SIMPLE：16 B 和 16 KiB 各使用 1 channel，4 MiB 使用 2 channels。原作业整体退出 1，原因是应用的分段 stdout 输出被完整 Proxy TRACE 插入，核对器误报 `operation stages differ`。已修复离线核对器，按原始字节片段恢复 rank0 两行、rank1 五行，18 项数值检查及完整技术复核通过；保留原始日志和失败状态，不要求重跑 GPU。两侧 memlock 仍为 64 KiB，但本轮实际通信未被阻塞，不新增平台配置前置任务。已把未来应用记录改为整行一次 `fwrite`，该 C++ 输出修复尚未在 Crater 编译运行。本次全仓库检查通过（102 项 Python、5 项 C++），两组 Day15 真实摘录与一组 M1 双节点 NET/IB 真实摘录均通过离线复核。公开 M1 摘录位于 `results/samples/e06/m1/`，原失败状态与恢复行计数保留，脱敏与筛选规则可复查。原运行与重试分别保存在忽略的 `.build/m1-download/`，重试离线报告为 `.build/m1-download/r1-retry/offline-recheck.txt`。下一步是用户观察本轮节点、数值和 transport 证据并确认 M1；确认后进入 M2，不在本次结果分析中自动推进。
 
 ### M2：最小 completion/state log
 
@@ -727,4 +727,4 @@ v0.5（2026-10-02）根据用户“修订计划文档，只执行必须要做的
 - 当前完成标签改为“核心方法复现已验证（双节点 RDMA、离线分析）”；不把范围缩减后的结果写成旧版 L2 或完整实时系统已完成。
 - 原计划的生产采集工程与兼容性扩展仍有用途，但不再作为当前核心方法复现的前置条件；以后需要时由用户明确启动。
 - 按用户指令删除失效的 Day14 交接、`runtime/README.md` 和重复的 `notes/nccl/`；历史学习资料统一保留在 `docs/legacy-nccl-source-study-notes/`。
-- 同步 AGENTS、实验 README 与代码 TODO：取消固定逐日推进和旧 L2/E05 目标，TODO 对应 M2，历史任务与下载流程明确标注；当前下一步仍是 M1，尚无双节点启动入口或真实采集。
+- 同步 AGENTS、实验 README 与代码 TODO：取消固定逐日推进和旧 L2/E05 目标，TODO 对应 M2，历史任务与下载流程明确标注；该次统一完成时下一步是 M1，当时尚无双节点入口或真实采集。

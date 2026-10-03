@@ -49,14 +49,14 @@ def portable(info: tarfile.TarInfo) -> tarfile.TarInfo:
     return info
 
 
-def add_bytes(archive: tarfile.TarFile, name: str, data: bytes) -> None:
-    info = tarfile.TarInfo(f"{PACKAGE_ROOT}/{name}")
+def add_bytes(archive: tarfile.TarFile, name: str, data: bytes, package_root: str = PACKAGE_ROOT) -> None:
+    info = tarfile.TarInfo(f"{package_root}/{name}")
     info.size = len(data)
     info.mode = 0o600
     archive.addfile(portable(info), io.BytesIO(data))
 
 
-def package_results(directory: Path, output: Path) -> str:
+def package_results(directory: Path, output: Path, *, files=FILES, package_root=PACKAGE_ROOT) -> str:
     root = directory.resolve(strict=True)
     if not root.is_dir():
         raise ValueError("结果路径必须是目录")
@@ -65,7 +65,7 @@ def package_results(directory: Path, output: Path) -> str:
         raise ValueError("压缩包已存在；请选择新输出路径")
     if regular_file(root, "run-status.txt") is None:
         raise ValueError("缺少 run-status.txt，无法保留作业退出状态")
-    files = {name: regular_file(root, name) for name in FILES}
+    files = {name: regular_file(root, name) for name in files}
     build_log = regular_file(root, "nccl-build/build.log")
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=output.parent, prefix=".day16-bundle-",
@@ -76,19 +76,19 @@ def package_results(directory: Path, output: Path) -> str:
         with tarfile.open(staging_path, "w:gz") as archive:
             for name, path in files.items():
                 if path is not None:
-                    archive.add(path, f"{PACKAGE_ROOT}/{name}", recursive=False, filter=portable)
+                    archive.add(path, f"{package_root}/{name}", recursive=False, filter=portable)
                     included.append(name)
             if build_log is not None:
                 with build_log.open("rb") as stream:
                     stream.seek(max(0, build_log.stat().st_size - BUILD_LOG_TAIL_BYTES))
                     tail = stream.read(BUILD_LOG_TAIL_BYTES)
-                add_bytes(archive, "nccl-build/build-tail.log", tail)
+                add_bytes(archive, "nccl-build/build-tail.log", tail, package_root)
                 included.append("nccl-build/build-tail.log")
             manifest = {"bundle_version": 1, "included_files": included,
                         "missing_files": [name for name, path in files.items() if path is None],
                         "build_log_policy": "last_128_KiB_only"}
             add_bytes(archive, "bundle-manifest.json",
-                      (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode())
+                      (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode(), package_root)
         # 原子发布且不覆盖；压缩失败时不会留下貌似完整的目标文件。
         output.hardlink_to(staging_path)
     finally:

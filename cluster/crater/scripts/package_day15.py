@@ -15,6 +15,7 @@ FILES = (
     "workloads/minimal_allreduce/run.sh",
     "workloads/minimal_allreduce/README.md",
     "workloads/minimal_allreduce/include/bootstrap.h",
+    "workloads/minimal_allreduce/include/device_binding.h",
     "workloads/minimal_allreduce/include/result_check.h",
     "workloads/minimal_allreduce/src/bootstrap.cpp",
     "workloads/minimal_allreduce/src/main.cpp",
