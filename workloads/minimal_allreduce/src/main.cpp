@@ -93,10 +93,13 @@ struct M2Capture {
   void* handle = nullptr;
   Complete complete_function = nullptr;
   Finish finish_function = nullptr;
+  using DelayConfigure = int (*)(int, int, std::uint64_t, int, std::uint64_t);
+  using DelayFinish = int (*)(const char*);
+  DelayFinish delay_finish = nullptr;
   bool started = false;
   std::string capture_id, output;
   ~M2Capture() { if (handle) dlclose(handle); }
-  void start(ncclComm_t comm, cudaStream_t stream) {
+  void start(ncclComm_t comm, cudaStream_t stream, int rank) {
     const char* enabled = std::getenv("MYCROFT_M2_ENABLE");
     if (!enabled || std::string(enabled) != "1") return;
     const char* id = std::getenv("MYCROFT_M2_CAPTURE_ID");
@@ -110,6 +113,18 @@ struct M2Capture {
     finish_function = reinterpret_cast<Finish>(dlsym(handle, "mycroftM2Finish"));
     if (!start_function || !complete_function || !finish_function)
       throw std::runtime_error("specified NCCL lacks M2 instrumentation symbols");
+    if (const char* delay = std::getenv("MYCROFT_M3_DELAY_NS")) {
+      const char* target_rank = std::getenv("MYCROFT_M3_RANK");
+      const char* target_op = std::getenv("MYCROFT_M3_OPERATION");
+      const char* target_channel = std::getenv("MYCROFT_M3_CHANNEL");
+      if (!target_rank || !target_op || !target_channel)
+        throw std::runtime_error("M3 target parameters missing");
+      auto configure = reinterpret_cast<DelayConfigure>(dlsym(handle, "mycroftM3Configure"));
+      delay_finish = reinterpret_cast<DelayFinish>(dlsym(handle, "mycroftM3Finish"));
+      if (!configure || !delay_finish || configure(rank, integer(target_rank, 0, 1),
+          integer(target_op, 0, 8), integer(target_channel, 0, 1), integer(delay, 0, 2000000000)) != 0)
+        throw std::runtime_error("M3 delay configuration/library rejected");
+    }
     if (start_function(comm, stream, 262144, 10000) != 0)
       throw std::runtime_error("M2 recorder initialization/scope rejected");
     started = true;
@@ -122,7 +137,9 @@ struct M2Capture {
   int finish() noexcept {
     if (!started) return 0;
     started = false;
-    return finish_function(capture_id.c_str(), output.c_str());
+    const int result = finish_function(capture_id.c_str(), output.c_str());
+    // Successful M2 export proves producer join before reading the injection record.
+    return result == 0 && delay_finish ? delay_finish(output.c_str()) : result;
   }
 };
 
@@ -197,7 +214,7 @@ int main(int argc, char** argv) {
     nccl_check(ncclCommInitRank(&runtime.comm, 2, id, rank));
     mark(rank, -1, 0, "comm_init_return");
     cuda_check(cudaStreamCreateWithFlags(&runtime.stream, cudaStreamNonBlocking));
-    runtime.capture.start(runtime.comm, runtime.stream);
+    runtime.capture.start(runtime.comm, runtime.stream, rank);
 
     int operation = 0;
     for (const std::size_t count : {4u, 4096u, 1048576u}) {

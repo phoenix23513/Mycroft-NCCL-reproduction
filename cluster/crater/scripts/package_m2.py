@@ -19,13 +19,13 @@ FILES = tuple(dict.fromkeys((*M1_FILES,
     "instrumentation/nccl-2.21.5/day16/README.md")))
 
 
-def add_bytes(archive, name, content):
-    info = tarfile.TarInfo("m2-experiment/" + name)
+def add_bytes(archive, name, content, package_root="m2-experiment"):
+    info = tarfile.TarInfo(package_root + "/" + name)
     info.size, info.mode = len(content), 0o644
     archive.addfile(info, io.BytesIO(content))
 
 
-def package(output):
+def package(output, *, extra_files=(), package_root="m2-experiment"):
     upstream = ROOT / "third_party/nccl"
     if subprocess.check_output(["git", "-C", str(upstream), "rev-parse", "HEAD"], text=True).strip() != COMMIT:
         raise ValueError("NCCL checkout differs from pinned base")
@@ -34,7 +34,7 @@ def package(output):
     paths = ["LICENSE.txt", "README.md", "Makefile", "makefiles", "src", "ext-net", "ext-tuner"]
     original = subprocess.check_output(["git", "-C", str(upstream), "archive", "--format=tar", COMMIT, *paths])
     import hashlib
-    files = {name: sha256(ROOT / name) for name in FILES}
+    files = {name: sha256(ROOT / name) for name in (*FILES, *extra_files)}
     for path in sorted((ROOT / "src/mycroft").rglob("*.py")):
         files[str(path.relative_to(ROOT))] = sha256(path)
     files["nccl-source.tar"] = hashlib.sha256(original).hexdigest()
@@ -45,9 +45,9 @@ def package(output):
     with tarfile.open(output, "x:gz") as archive:
         for name in files:
             if name != "nccl-source.tar":
-                archive.add(ROOT / name, "m2-experiment/" + name, recursive=False, filter=portable)
-        add_bytes(archive, "nccl-source.tar", original)
-        add_bytes(archive, "upload-manifest.json", (json.dumps(manifest, indent=2) + "\n").encode())
+                archive.add(ROOT / name, package_root + "/" + name, recursive=False, filter=portable)
+        add_bytes(archive, "nccl-source.tar", original, package_root)
+        add_bytes(archive, "upload-manifest.json", (json.dumps(manifest, indent=2) + "\n").encode(), package_root)
     return sha256(output)
 
 

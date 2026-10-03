@@ -18,14 +18,16 @@ def command(arguments, log, environment=None):
         subprocess.run(arguments, stdout=output, stderr=subprocess.STDOUT, env=environment, check=True)
 
 
-def build(work, jobs, cuda):
+def build(work, jobs, cuda, *, prepare_source=prepare, build_kind="m2_instrumented", extra_symbols=(),
+          package_root="m2-build-results"):
     archive_path = work.with_name(work.name + ".tar.gz")
     if archive_path.exists() or archive_path.is_symlink():
         raise ValueError("build result archive already exists; choose a new work directory")
     work.mkdir(parents=True, exist_ok=False)
     status = 1
     temporary = None
-    metadata = {"build_kind": "m2_instrumented", "base_commit": COMMIT, "status": "FAILED"}
+    label = "m3" if build_kind == "m3_instrumented" else "m2"
+    metadata = {"build_kind": build_kind, "base_commit": COMMIT, "status": "FAILED"}
     try:
         if any(char.isspace() for char in str(work) + str(cuda)):
             raise ValueError("NCCL make paths must not contain whitespace")
@@ -39,7 +41,7 @@ def build(work, jobs, cuda):
         temporary = tempfile.TemporaryDirectory(prefix="mycroft-m2-build-")
         scratch = Path(temporary.name)
         source = scratch / "source"
-        provenance = prepare(ROOT, source)
+        provenance = prepare_source(ROOT, source)
         product = scratch / "nccl"
         product.mkdir()
         saved = work / "nccl"
@@ -61,7 +63,7 @@ def build(work, jobs, cuda):
                          [sys.executable, "--version"]):
                 subprocess.run(args, stdout=output, stderr=subprocess.STDOUT, check=True)
         metadata.update(provenance, jobs=jobs, trace=1, nvcc_gencode=gencode, command=arguments)
-        print("m2_build=COMPILING gpu_required=no target=V100_sm70", flush=True)
+        print(f"{label}_build=COMPILING gpu_required=no target=V100_sm70", flush=True)
         command(arguments, work / "build.log", environment)
         shutil.copytree(product / "include", saved / "include")
         (saved / "lib").mkdir()
@@ -74,23 +76,23 @@ def build(work, jobs, cuda):
         library = saved / "lib/libnccl.so.2.21.5"
         command([str(work / "nccl_version"), str(library)], work / "verification.log")
         symbols = subprocess.check_output(["readelf", "--dyn-syms", "--wide", str(library)], text=True)
-        for name in ("mycroftM2Start", "mycroftM2Complete", "mycroftM2Finish"):
+        for name in ("mycroftM2Start", "mycroftM2Complete", "mycroftM2Finish", *extra_symbols):
             if not any(line.split()[-1:] == [name] and " UND " not in line for line in symbols.splitlines()):
                 raise ValueError(f"M2 exported symbol missing: {name}")
-        (work / "m2-symbols.txt").write_text("\n".join(line for line in symbols.splitlines() if "mycroftM2" in line) + "\n")
+        (work / "m2-symbols.txt").write_text("\n".join(line for line in symbols.splitlines() if "mycroftM2" in line or "mycroftM3" in line) + "\n")
         # Ensure compilation did not alter the prepared instrumented source inputs.
         if any(sha256(source / name) != digest for name, digest in provenance["patched_files"].items()):
             raise ValueError("instrumented source changed during build")
         metadata.update(status="PASS", library_sha256=sha256(library), runtime_version=22105)
         (saved / "build-manifest.txt").write_text(
             f"source_commit={COMMIT}\nsource_tag=v2.21.5-1\nsource_clean=no\n"
-            f"build_kind=m2_instrumented\ntrace=1\nstatus=PASS\nlibrary_sha256={metadata['library_sha256']}\n")
+            f"build_kind={build_kind}\ntrace=1\nstatus=PASS\nlibrary_sha256={metadata['library_sha256']}\n")
         (saved / "m2-build.json").write_text(json.dumps(metadata, indent=2) + "\n")
         status = 0
-        print(f"m2_build=PASS nccl_root={saved}\nlibrary_sha256={metadata['library_sha256']}", flush=True)
+        print(f"{label}_build=PASS nccl_root={saved}\nlibrary_sha256={metadata['library_sha256']}", flush=True)
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         metadata["error"] = str(error)
-        print(f"m2_build=FAILED reason={error}", flush=True)
+        print(f"{label}_build=FAILED reason={error}", flush=True)
     finally:
         if temporary is not None:
             temporary.cleanup()
@@ -101,7 +103,7 @@ def build(work, jobs, cuda):
             with (work / "build.log").open("rb") as source:
                 source.seek(max(0, (work / "build.log").stat().st_size - 512*1024))
                 (work / "build-tail.log").write_bytes(source.read())
-        digest = package_results(work, work.with_name(work.name + ".tar.gz"), package_root="m2-build-results",
+        digest = package_results(work, work.with_name(work.name + ".tar.gz"), package_root=package_root,
             files=("run-status.txt", "build-status.json", "environment.txt", "build-tail.log", "probe-build.log",
                    "verification.log", "m2-symbols.txt", "nccl/m2-build.json", "nccl/m2-source-manifest.json",
                    "nccl/build-manifest.txt"))

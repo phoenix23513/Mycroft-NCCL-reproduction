@@ -1,0 +1,51 @@
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -39,10 +39,10 @@
+ LIBTARGET  := $(LIBNAME:%=%.$(NCCL_MAJOR).$(NCCL_MINOR).$(NCCL_PATCH))
+ STATICLIBTARGET := $(STATICLIBNAME)
+ PKGTARGET  := $(PKGCONFIGFILE)
+-LIBSRCFILES += mycroft_m2.cc mycroft_operation_trace.cc
++LIBSRCFILES += mycroft_m2.cc mycroft_operation_trace.cc mycroft_m3.cc
+ LIBOBJ     := $(LIBSRCFILES:%.cc=$(OBJDIR)/%.o)
+ # Only project-owned host recorder/adapter uses C++17; device code stays upstream C++11.
+-$(OBJDIR)/mycroft_m2.o $(OBJDIR)/mycroft_operation_trace.o: CXXFLAGS += -std=c++17
++$(OBJDIR)/mycroft_m2.o $(OBJDIR)/mycroft_operation_trace.o $(OBJDIR)/mycroft_m3.o: CXXFLAGS += -std=c++17
+ DEPFILES   := $(LIBOBJ:%.o=%.d)
+ LDFLAGS    += -L${CUDA_LIB} -l$(CUDARTLIB) -lpthread -lrt -ldl
+ 
+--- a/src/transport/net.cc
++++ b/src/transport/net.cc
+@@ -8,6 +8,7 @@
+ #include "net.h"
+ #include "graph.h"
+ #include "proxy.h"
++#include "mycroft_m3.h"
+ #include "collectives.h"
+ #include "gdrwrap.h"
+ #include "shm.h"
+@@ -1119,14 +1120,17 @@
+           }
+           if (ready) {
+             mycroftM2Ready(args, sub);
+-            // Data is ready, try to send.
+-            NCCLCHECK(proxyState->ncclNet->isend(resources->netSendComm, buff, size, resources->tpRank, sub->mhandle, sub->requests+buffSlot));
+-            if (sub->requests[buffSlot] != NULL) {
+-              TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend posted, req %p, size %d, proto %d, myRank %d, channelId %d", sub->transmitted, buffSlot, sub->requests[buffSlot], size, p, proxyState->tpRank, sub->channelId);
+-              sub->transmitted += args->sliceSteps;
+-              for (uint64_t step=sub->transmitted-args->sliceSteps; step<sub->transmitted; step++) ncclProfilingRecord(args, s, step, ncclProxyProfileSendWait);
+-              args->idle = 0;
+-              continue;
++            // M3 gates only this isend; other subs and outstanding requests still progress.
++            if (mycroftM3AllowSend(args, sub)) {
++              // Data is ready, try to send.
++              NCCLCHECK(proxyState->ncclNet->isend(resources->netSendComm, buff, size, resources->tpRank, sub->mhandle, sub->requests+buffSlot));
++              if (sub->requests[buffSlot] != NULL) {
++                TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend posted, req %p, size %d, proto %d, myRank %d, channelId %d", sub->transmitted, buffSlot, sub->requests[buffSlot], size, p, proxyState->tpRank, sub->channelId);
++                sub->transmitted += args->sliceSteps;
++                for (uint64_t step=sub->transmitted-args->sliceSteps; step<sub->transmitted; step++) ncclProfilingRecord(args, s, step, ncclProxyProfileSendWait);
++                args->idle = 0;
++                continue;
++              }
+             }
+           }
+         }

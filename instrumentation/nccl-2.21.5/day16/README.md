@@ -1,6 +1,6 @@
 # M2 最小采集：保留的 Day16 框架
 
-当前状态：进程内有界记录器、NCCL adapter/补丁、独立源码准备与构建入口、双 rank 启动、结果核对及单文件打包已实现。Crater 插桩库构建与加载检查已通过；r3 双物理节点 NET/IB 采集及本地独立技术核对通过，18 项数值结果正确，每侧九条 completion、周期中间进度齐全且零丢失。完整 M2 验收待用户复核，当前无需重跑。导出包含 Event v2、原始发送/接收状态及身份/plan 元数据。
+当前状态：进程内有界记录器、NCCL adapter/补丁、独立源码准备与构建入口、双 rank 启动、结果核对及单文件打包已实现。Crater 插桩库构建与加载检查已通过；r3 双物理节点 NET/IB 采集及本地独立技术核对通过，18 项数值结果正确，每侧九条 completion、周期中间进度齐全且零丢失。M2 已验证，用户已授权进入 M3，当前无需重跑。导出包含 Event v2、原始发送/接收状态及身份/plan 元数据。
 
 执行依据为 [v0.5 核心复现计划](../../../docs/plans/Mycroft_26日开发路线图.md)。M1 双节点 NET/IB 路径已验证，用户已授权进入 M2 普通 RING/SIMPLE 最小采集。Graph、grouped collectives、完整 P2P GPU 标记/managed memory 方案均已移出当前范围。
 
@@ -92,11 +92,11 @@ m2_tmp=$(mktemp -d /tmp/m2-upload.XXXXXX) && tar -xzf m2-experiment.tar.gz -C "$
 python3 instrumentation/nccl-2.21.5/day16/verify_capture.py <解包目录>/m2-results
 ```
 
-预期打印两侧 completion/sample/window/loss 信息及 `m2_technical_checks=PASS`；这表示技术证据通过，用户观察关键结果后才更新 M2 验收。当前 r3 的 CUDA 构建来源、双节点 GPU 通信、采集及字段对账已通过；完整 M2 验收待用户复核。
+预期打印两侧 completion/sample/window/loss 信息及 `m2_technical_checks=PASS`；这表示技术证据通过，用户观察关键结果后才更新 M2 验收。当前 r3 的 CUDA 构建来源、双节点 GPU 通信、采集及字段对账已通过；M2 已验证，用户已授权进入 M3。
 
 ## 框架职责与实现边界
 
-目标：将目标 NET 路径的操作身份、中间进度和本地整体完成组织成可核对的记录，使后续分析能区分“GPU 尚未准备”“请求尚未提交”“网络尚未完成”。记录器及接入代码已实现，真实 CUDA 构建与加载、双节点 GPU 运行及技术核对均已通过，完整 M2 验收待用户复核。
+目标：将目标 NET 路径的操作身份、中间进度和本地整体完成组织成可核对的记录，使后续分析能区分“GPU 尚未准备”“请求尚未提交”“网络尚未完成”。记录器及接入代码已实现，真实 CUDA 构建与加载、双节点 GPU 运行及技术核对均已通过，M2 已验证，用户已授权进入 M3。
 
 输入：当前记录器接收结构化 C++ 记录和调用者提供的观测 ns；真实适配使用固定 NCCL 2.21.5、原生 workload 与 M1 已验证 NET/IB 路径。M2 最终输出为身份/channel/peer 关联、基于同进程单调时钟的 completion、周期 state、必要接收证据、构建来源及运行状态。CPU fixture 的字段是手写数据，只验证记录器。
 

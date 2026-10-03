@@ -12,7 +12,8 @@
 - **E02 已完成**：发送侧归一化分析 fixture、三类合成停滞和论文四类快照状态分类均已通过验收；它不作为真实 NCCL 执行或插桩正确性的证据。
 - **E03 已完成并完成契约纠错**：Event v1 保持可读，Event v2 补充真实单调时间与 operation completion；NCCL 2.21.5 字段仍待目标路径动态验证。
 - **真实基线已完成**：项目 NCCL 的构建/加载及同机 P2P/CUMEM 原生双 GPU AllReduce 已验证。执行入口与证据见 [`instrumentation/nccl-2.21.5/README.md`](instrumentation/nccl-2.21.5/README.md)。
-- **M1 已验证**：真实双节点 NET/IB AllReduce 两侧各九次结果正确，实际计划为 RING/SIMPLE；应用输出与 Proxy TRACE 交错导致的原核对失败已通过离线修复复查。说明与真实摘录见 [M1 实验 README](workloads/minimal_allreduce/M1_README.md)；M2 记录器、adapter/patch 与构建/运行实验包已有代码，Crater 插桩库构建与加载检查已通过，双节点 GPU 采集及技术核对已通过，完整 M2 验收待用户复核，见 [采集框架](instrumentation/nccl-2.21.5/day16/README.md)。
+- **M1 已验证**：真实双节点 NET/IB AllReduce 两侧各九次结果正确，实际计划为 RING/SIMPLE；应用输出与 Proxy TRACE 交错导致的原核对失败已通过离线修复复查。说明与真实摘录见 [M1 实验 README](workloads/minimal_allreduce/M1_README.md)；M2 记录器、adapter/patch 与构建/运行实验包已有代码，Crater 插桩库构建与加载检查已通过，双节点 GPU 采集及技术核对已通过，M2 已验证，用户已授权进入 M3，见 [采集框架](instrumentation/nccl-2.21.5/day16/README.md)。
+- **M3 框架已实现**：非阻塞软件发送延迟、三组对照 runner 与离线核对，本地检查通过；Crater 新库 CUDA 编译与加载检查、三组 GPU 对照技术核对已通过；真实等待、对端受阻与恢复已记录，用户已明确进入 M4，自动诊断尚未完成，见 [M3 实验设计与实现](instrumentation/nccl-2.21.5/m3/README.md)。
 - Crater 上已经完成 CPU/Gloo 双进程 AllReduce 与单 GPU PyTorch/CUDA 环境验证。
 
 详细任务与里程碑进度见 [`docs/plans/Mycroft_26日开发路线图.md`](docs/plans/Mycroft_26日开发路线图.md)。
@@ -70,7 +71,7 @@ ctest --test-dir .build --output-on-failure
 | E05（后续扩展） | 如何持续低开销传递真实 NCCL 运行时事件 | 共享内存循环缓冲区与 reader；本轮不实现 |
 | E06 | 真实 NCCL 能否产生可分析事件并复现确定性异常 | NCCL 2.21.5 构建、插桩与双节点验证 |
 
-阶段编号表示能力边界。主线是 M1 目标 NET/RDMA 路径 → M2 最小真实日志 → M3 软件延迟对照 → M4 Trigger/RCA → M5 双节点 RDMA 端到端验收，当前 M1 已验证，M2 记录器、插桩与实验包代码已实现，Crater 插桩库构建与加载检查已通过，双节点 GPU 采集及技术核对已通过，完整 M2 验收待用户复核，M3—M5 真实验收尚未完成。E01/E02 只保留为单元回归。Graph、多协议、完整 P2P GPU 采集与 E05 不作为本轮门槛；最终只标记核心方法复现已验证，不声称完整实时系统已完成。
+阶段编号表示能力边界。主线是 M1 目标 NET/RDMA 路径 → M2 最小真实日志 → M3 软件延迟对照 → M4 Trigger/RCA → M5 双节点 RDMA 端到端验收，当前 M1 已验证，M2 记录器、插桩与实验包代码已实现，Crater 插桩库构建与加载检查已通过，双节点 GPU 采集及技术核对已通过，M2 已验证，用户已授权进入 M3，M3 已验证，M4—M5 尚未完成。E01/E02 只保留为单元回归。Graph、多协议、完整 P2P GPU 采集与 E05 不作为本轮门槛；最终只标记核心方法复现已验证，不声称完整实时系统已完成。
 
 ## 仓库中有什么
 

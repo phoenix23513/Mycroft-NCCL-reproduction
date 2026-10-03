@@ -66,7 +66,7 @@ def run(arguments, log, timeout, environment=None):
                     child.wait()
 
 
-def execute(rank, directory, nccl_root, config, timeout, *, capture_m2=False):
+def execute(rank, directory, nccl_root, config, timeout, *, capture_m2=False, delay_target=None):
     folder = directory / f"rank{rank}"
     folder.mkdir()  # 拒绝重试覆盖本次 rank 的已有结果。
     status = {"rank": rank, "run_id": config["run_id"], "exit_code": 1}
@@ -75,11 +75,19 @@ def execute(rank, directory, nccl_root, config, timeout, *, capture_m2=False):
         environment = dict(os.environ, **SETTINGS)
         environment.pop("NCCL_DEBUG_FILE", None)
         # An inherited environment must not silently enable instrumentation in M1.
-        for name in ("MYCROFT_M2_ENABLE", "MYCROFT_M2_CAPTURE_ID", "MYCROFT_M2_OUTPUT"):
+        for name in ("MYCROFT_M2_ENABLE", "MYCROFT_M2_CAPTURE_ID", "MYCROFT_M2_OUTPUT",
+                     "MYCROFT_M3_DELAY_NS", "MYCROFT_M3_RANK", "MYCROFT_M3_OPERATION", "MYCROFT_M3_CHANNEL"):
             environment.pop(name, None)
         if capture_m2:
             environment.update(MYCROFT_M2_ENABLE="1", MYCROFT_M2_CAPTURE_ID=config["run_id"],
                                MYCROFT_M2_OUTPUT=str(folder / "capture"))
+        if delay_target is not None:
+            if not capture_m2:
+                raise ValueError("M3 injection requires active capture")
+            environment.update(MYCROFT_M3_DELAY_NS=str(delay_target["delay_ns"]),
+                               MYCROFT_M3_RANK=str(delay_target["rank"]),
+                               MYCROFT_M3_OPERATION=str(delay_target["operation"]),
+                               MYCROFT_M3_CHANNEL=str(delay_target["channel"]))
         status["probe_exit_code"] = run(
             [sys.executable, str(ROOT / "cluster/crater/probes/rdma_probe.py"), "--rank", str(rank)],
             folder / "probe.json", 120, environment)
@@ -94,7 +102,7 @@ def execute(rank, directory, nccl_root, config, timeout, *, capture_m2=False):
             for name in ("m2-build.json", "m2-source-manifest.json"):
                 shutil.copyfile(nccl_root / name, folder / name)
         write_json(folder / "environment.json", {"rank": rank, "library_path": str(library),
-                   "library_sha256": digest, "settings": SETTINGS,
+                   "library_sha256": digest, "settings": SETTINGS, "delay_target": delay_target,
                    "optional_network_settings": {key: environment[key] for key in
                      ("NCCL_IB_HCA", "NCCL_SOCKET_IFNAME", "NCCL_IB_GID_INDEX", "NCCL_NET_GDR_LEVEL")
                      if key in environment}})

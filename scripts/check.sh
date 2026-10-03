@@ -64,4 +64,8 @@ python3 "$project_root/workloads/minimal_allreduce/verify_m1.py" \
 echo "[check] M2 recorder, evidence contracts and source delivery (CPU only; CUDA build not run)"
 bash "$project_root/instrumentation/nccl-2.21.5/day16/check_framework.sh"
 
+echo "[check] M3 deadline gate, injection evidence and source delivery (CPU only)"
+python3 -m unittest discover \
+  -s "$project_root/instrumentation/nccl-2.21.5/m3/tests" -p "test_*.py"
+
 echo "[check] All repository checks passed"
